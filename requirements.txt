@@ -23,4 +23,4 @@ undetected-chromedriver
 webdriver-manager
 pinecone[grpc]
 google-generativeai
-
+python-multipart
