@@ -1,0 +1,20 @@
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pkl  # Ignore pickle files
+*.log
+
+# Ignore database and indexes
+db/
+faiss_index/
+scraped_data.pkl
+session_state.pkl
+links_hash.pkl
+
+# Ignore virtual environment
+.env/
+
+# Ignore dependency logs
+*.lock
+
