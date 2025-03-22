@@ -22,6 +22,12 @@ load_dotenv()
 
 app = FastAPI()
 
+# Get PORT from environment variable (default to 8000)
+PORT = int(os.getenv("PORT", 8000))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
+
 # Allow frontend to access backend
 app.add_middleware(
     CORSMiddleware,
@@ -279,5 +285,3 @@ async def reset_chat():
 def home():
     return {"message": "Backend is running!"}
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
