@@ -1,4 +1,3 @@
-
 chromadb
 langchain
 tiktoken
@@ -17,16 +16,9 @@ qdrant-client
 pymilvus
 weaviate-client
 langchain-weaviate
-selenium
-streamlit
+playwright
 PyPDF2
 pysqlite3-binary
 undetected-chromedriver
 webdriver-manager
 pinecone[grpc]
-undetected-chromedriver
-
-
-
-
-
