@@ -4,6 +4,9 @@ FROM python:3.10
 # Set the working directory inside the container
 WORKDIR /app
 
+# Set non-interactive mode to avoid prompts during package installation
+ARG DEBIAN_FRONTEND=noninteractive
+
 # Install system dependencies required by Playwright
 RUN apt-get update && apt-get install -y \
     libnss3 \
