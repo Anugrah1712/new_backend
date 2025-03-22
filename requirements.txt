@@ -1,7 +1,6 @@
 chromadb
 langchain
 tiktoken
-Chroma
 langchain-community
 langchain_together
 sentence-transformers
@@ -18,9 +17,8 @@ weaviate-client
 langchain-weaviate
 playwright
 PyPDF2
-pysqlite3-binary
 undetected-chromedriver
 webdriver-manager
-pinecone[grpc]
+pinecone-client
 google-generativeai
 python-multipart

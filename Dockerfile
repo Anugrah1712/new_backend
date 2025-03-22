@@ -9,6 +9,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies required by Playwright
 RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    unzip \
+    xvfb \
+    fonts-liberation \
     libnss3 \
     libnspr4 \
     libdbus-1-3 \
@@ -23,6 +28,14 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libasound2 \
     libatspi2.0-0 \
+    libappindicator3-1 \
+    libjpeg-dev \
+    libxshmfence1 \
+    libpangocairo-1.0-0 \
+    libpangoft2-1.0-0 \
+    libwoff1 \
+    libopus0 \
+    libegl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies
@@ -36,5 +49,5 @@ COPY . .
 # Expose the port your app will run on
 EXPOSE 8000
 
-# Command to run your FastAPI app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the FastAPI app using xvfb-run
+CMD ["xvfb-run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
