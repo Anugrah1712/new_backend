@@ -42,8 +42,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    python -m playwright install --with-deps
+RUN pip install --no-cache-dir -r requirements.txt 
+    # python -m playwright install --with-deps
 
 # Copy the entire project to the container
 COPY . .

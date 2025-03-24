@@ -4,7 +4,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from typing import List
 from preprocess import preprocess_vectordbs
 from inference import inference
-from webscrape import scrape_web_data
+# from webscrape import scrape_web_data
 import validators
 import uvicorn
 import json
@@ -22,16 +22,11 @@ load_dotenv()
 
 app = FastAPI()
 
-# Get PORT from environment variable (default to 8000)
-PORT = int(os.getenv("PORT", 8000))
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
 
 # Allow frontend to access backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Change this to match your frontend URL
+    allow_origins=["*"],  # Change this to match your frontend URL
     allow_credentials=True,
     allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allows all headers
@@ -120,20 +115,20 @@ async def preprocess(
                 raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
         # Web scraping
-        if links_list:
-            try:
-                print("🌐 Scraping web data...")
-                scraped_data = await scrape_web_data(links_list)
-                print("✅ Web scraping completed!\n")
-            except Exception as e:
-                print(f"❌ Web scraping failed: {str(e)}\n")
-                raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
+        # if links_list:
+        #     try:
+        #         print("🌐 Scraping web data...")
+        #         scraped_data = await scrape_web_data(links_list)
+        #         print("✅ Web scraping completed!\n")
+        #     except Exception as e:
+        #         print(f"❌ Web scraping failed: {str(e)}\n")
+        #         raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
     
         # Process documents
         try:
             index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name , vs ,qdrant_client= await preprocess_vectordbs(
-            doc_files, scraped_data , embedding_model, chunk_size, chunk_overlap
+            doc_files , embedding_model, chunk_size, chunk_overlap #scraped_data
             )
 
             session_state.update({
@@ -282,6 +277,9 @@ async def reset_chat():
     return {"message": "Chat history reset and session state cleared!"}
 
 @app.get("/")
-def home():
-    return {"message": "Backend is running!"}
+def read_root():
+    return {"message": "Hello, World!"}
 
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))  # Get PORT from environment, default to 8000
+    uvicorn.run(app, host="0.0.0.0", port=port)
