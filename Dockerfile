@@ -27,7 +27,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright (Use headless mode to save memory)
-RUN python -m playwright install --with-deps --no-headless
+RUN python -m playwright install --with-deps 
 
 # Copy the entire project
 COPY . .
