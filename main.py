@@ -280,6 +280,15 @@ async def reset_chat():
 def read_root():
     return {"message": "Hello, World!"}
 
+import gc
+
+@app.middleware("http")
+async def clear_memory_middleware(request: Request, call_next):
+    response = await call_next(request)
+    gc.collect()  # Free up memory
+    return response
+
+
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 10000))  # Default to 10000 if PORT is not set
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    port = int(os.getenv("PORT", 8000))  # Use Render's dynamic port
+    uvicorn.run(app, host="0.0.0.0", port=port, workers=1) 

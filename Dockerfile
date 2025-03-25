@@ -1,61 +1,40 @@
-#dockerfile
+# Use a slim Python image to reduce memory footprint
+FROM python:3.10-slim
 
-# Use an official Python image
-FROM python:3.10
-
-# Set the working directory inside the container
+# Set working directory
 WORKDIR /app
 
-# Set non-interactive mode to avoid prompts during package installation
+# Set non-interactive mode
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies required by Playwright
+# Install only essential dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     unzip \
-    xvfb \
     fonts-liberation \
     libnss3 \
     libnspr4 \
     libdbus-1-3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
     libxkbcommon0 \
     libasound2 \
-    libatspi2.0-0 \
-    libappindicator3-1 \
     libjpeg-dev \
     libxshmfence1 \
-    libpangocairo-1.0-0 \
-    libpangoft2-1.0-0 \
-    libwoff1 \
-    libopus0 \
-    libegl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and its dependencies separately
-RUN python -m playwright install --with-deps
+# Install Playwright (Use headless mode to save memory)
+RUN python -m playwright install --with-deps --no-headless
 
-# Copy the entire project to the container
+# Copy the entire project
 COPY . .
 
-# Expose the dynamic port
-EXPOSE 10000
+# Use dynamic port for Render
+ENV PORT 8000
+EXPOSE 8000
 
-# Start the FastAPI app using the dynamically assigned port
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
-
-
-
-
+# Start FastAPI app with a single worker to reduce memory usage
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
