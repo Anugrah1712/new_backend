@@ -54,7 +54,8 @@ COPY . .
 EXPOSE 10000
 
 # Start the FastAPI app using the dynamically assigned port
-CMD ["sh", "-c", "xvfb-run uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+
 
 
 
