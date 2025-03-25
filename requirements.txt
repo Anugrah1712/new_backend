@@ -19,6 +19,6 @@ playwright
 PyPDF2
 undetected-chromedriver
 webdriver-manager
-pinecone-client
+pinecone
 google-generativeai
 python-multipart
