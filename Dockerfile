@@ -42,15 +42,19 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt 
-    # python -m playwright install --with-deps
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright and its dependencies separately
+RUN python -m playwright install --with-deps
 
 # Copy the entire project to the container
 COPY . .
 
-# Expose the port your app will run on
-EXPOSE 8000
+# Expose the dynamic port
+EXPOSE 10000
 
-# Start the FastAPI app using xvfb-run
-CMD ["xvfb-run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+# Start the FastAPI app using the dynamically assigned port
+CMD ["sh", "-c", "xvfb-run uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+
+
 

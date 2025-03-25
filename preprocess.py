@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-async def preprocess_text(files: list[UploadFile], size, overlap): #scraped_data
+async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data): #scraped_data
     import time
     
     paragraphs = []
@@ -61,9 +61,9 @@ async def preprocess_text(files: list[UploadFile], size, overlap): #scraped_data
 
         #     await browser.close()  # <-- Await browser close
 
-    # if scraped_data:
-    #     print(f"✅ Adding {len(scraped_data)} scraped web pages to preprocessing.")
-    #     paragraphs.extend(scraped_data)
+    if scraped_data:
+        print(f"✅ Adding {len(scraped_data)} scraped web pages to preprocessing.")
+        paragraphs.extend(scraped_data)
 
     paragraphs = [para.strip() for para in paragraphs if para.strip()]
     # print(paragraphs)
@@ -248,10 +248,10 @@ sys.modules["sqlite3"] = sqlite3
 
 embedding_model_global = None
 
-async def preprocess_vectordbs(files: list[UploadFile], embedding_model_name, size, overlap): #scraped_data
+async def preprocess_vectordbs(files: list[UploadFile], embedding_model_name, size, overlap ,scraped_data): #scraped_data
     global embedding_model_global
 
-    text = await preprocess_text(files,  size, overlap) # scraped_data
+    text = await preprocess_text(files,  size, overlap ,scraped_data) # scraped_data
     persist_directory = 'db'
 
     embedding_model_global = SentenceTransformerEmbeddings(model_name=embedding_model_name)

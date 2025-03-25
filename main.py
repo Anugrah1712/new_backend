@@ -4,7 +4,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from typing import List
 from preprocess import preprocess_vectordbs
 from inference import inference
-# from webscrape import scrape_web_data
+from webscrape import scrape_web_data
 import validators
 import uvicorn
 import json
@@ -115,20 +115,20 @@ async def preprocess(
                 raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
         # Web scraping
-        # if links_list:
-        #     try:
-        #         print("🌐 Scraping web data...")
-        #         scraped_data = await scrape_web_data(links_list)
-        #         print("✅ Web scraping completed!\n")
-        #     except Exception as e:
-        #         print(f"❌ Web scraping failed: {str(e)}\n")
-        #         raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
+        if links_list:
+            try:
+                print("🌐 Scraping web data...")
+                scraped_data = await scrape_web_data(links_list)
+                print("✅ Web scraping completed!\n")
+            except Exception as e:
+                print(f"❌ Web scraping failed: {str(e)}\n")
+                raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
     
         # Process documents
         try:
             index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name , vs ,qdrant_client= await preprocess_vectordbs(
-            doc_files , embedding_model, chunk_size, chunk_overlap #scraped_data
+            doc_files , embedding_model, chunk_size, chunk_overlap , scraped_data
             )
 
             session_state.update({
