@@ -126,8 +126,8 @@ def preprocess_weaviate(text, embedding_model_name):
 
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
 
-    weaviate_url = os.getenv("WEAVIATE_URL")
-    weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+    weaviate_url = "https://vontrurrcw0j8trbe1bgg.c0.asia-southeast1.gcp.weaviate.cloud"
+    weaviate_api_key = "HItChKQ5GsEQAqK1oH8OlbWnx398b1yEUzLy"
 
 
     client = weaviate.connect_to_weaviate_cloud(
@@ -158,7 +158,7 @@ def preprocess_pinecone(text, embedding_model_name):
 
     # Initialize Pinecone
     pinecone = Pinecone(
-        api_key=os.getenv("PINECONE_API_KEY"),
+        api_key="pcsk_42Yw14_EaKdaMLiAJfWub3s2sEJYPW3jyXXjdCYkH8Mh8rD8wWJ3pS6oCCC9PGqBNuDTuf",
         environment="us-east-1"
     )
 
@@ -195,9 +195,9 @@ def preprocess_qdrant(text, embedding_model_name):
     import os
 
     # ✅ Load Qdrant credentials
-    qdrant_url = os.getenv("QDRANT_URL")  # Default to local Qdrant
-    qdrant_api_key = os.getenv("QDRANT_API_KEY", None)
-    collection_name = os.getenv("QDRANT_COLLECTION_NAME")
+    qdrant_url = "https://7a0284df-8bde-48b6-9e34-3f2528dcdba7.europe-west3-0.gcp.cloud.qdrant.io:6333" # Default to local Qdrant
+    qdrant_api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.uDGc0_umW-4NwCfOTcbcT7bupSDIo0MmbQU5dXILWiM"
+    collection_name = "text_vectors"
 
     # ✅ Initialize Qdrant Client
     client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key , timeout=120)

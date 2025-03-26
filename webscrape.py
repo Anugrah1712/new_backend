@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
+
 
 # Pickle file paths
 WEB_SCRAPE_PICKLE = "scraped_data.pkl"
