@@ -280,13 +280,13 @@ async def reset_chat():
 def read_root():
     return {"message": "Hello, World!"}
 
-import gc
+# import gc
 
-@app.middleware("http")
-async def clear_memory_middleware(request: Request, call_next):
-    response = await call_next(request)
-    gc.collect()  # Free up memory
-    return response
+# @app.middleware("http")
+# async def clear_memory_middleware(request: Request, call_next):
+#     response = await call_next(request)
+#     gc.collect()  # Free up memory
+#     return response
 
 
 if __name__ == "__main__":

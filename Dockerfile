@@ -22,8 +22,14 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install virtualenv and create a venv
+RUN python -m venv /app/venv
+
+# Activate virtual environment
+ENV PATH="/app/venv/bin:$PATH"
 # Install Python dependencies
 COPY requirements.txt .
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright (Use headless mode to save memory)
