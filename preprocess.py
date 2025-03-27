@@ -132,8 +132,10 @@ def preprocess_weaviate(text, embedding_model_name):
 
     client = weaviate.connect_to_weaviate_cloud(
         cluster_url=weaviate_url,
-        auth_credentials="AuthApiKey(weaviate_api_key),"
+        auth_credentials=AuthApiKey(weaviate_api_key)
     )
+
+    
 
     vs = WeaviateVectorStore.from_documents(
         documents=text,
