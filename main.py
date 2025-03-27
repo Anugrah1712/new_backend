@@ -26,7 +26,7 @@ app = FastAPI()
 # Allow frontend to access backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change this to match your frontend URL
+    allow_origins=["https://rag-chatbot-frontend-two.vercel.app" , "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app" , "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app" , "http://localhost:3000"],  # Change this to match your frontend URL
     allow_credentials=True,
     allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allows all headers
