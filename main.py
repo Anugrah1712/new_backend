@@ -27,11 +27,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://rag-chatbot-frontend-ruddy.vercel.app",
-        "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
-        "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
-        "http://localhost:3000",
-        "https://cff4-16-171-11-157.ngrok-free.app",  # ✅ Add Ngrok URL
+        "http://localhost:3000"
         "*"  # ⚠️ Avoid using this in production
     ],
     allow_credentials=True,
