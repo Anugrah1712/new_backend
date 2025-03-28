@@ -26,11 +26,19 @@ app = FastAPI()
 # Allow frontend to access backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://rag-chatbot-frontend-two.vercel.app" , "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app" , "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app" , "http://localhost:3000"],  # Change this to match your frontend URL
+    allow_origins=[
+        "https://rag-chatbot-frontend-ruddy.vercel.app",
+        "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+        "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
+        "http://localhost:3000",
+        "https://cff4-16-171-11-157.ngrok-free.app",  # ✅ Add Ngrok URL
+        "*"  # ⚠️ Avoid using this in production
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 # File path for saved session state
 PICKLE_FILE_PATH = "session_state.pkl"
