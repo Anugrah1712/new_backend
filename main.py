@@ -26,11 +26,17 @@ app = FastAPI()
 # Allow frontend to access backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000" , "*"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
+        "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+        "https://rag-chatbot-frontend-zeta.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 # File path for saved session state
@@ -63,8 +69,8 @@ if os.path.exists(PICKLE_FILE_PATH):
     # ✅ Initialize Qdrant Client if Needed
     if session_state.get("qdrant_client") is None:
         from qdrant_client import QdrantClient
-        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-        qdrant_api_key = os.getenv("QDRANT_API_KEY", None)
+        qdrant_url = "https://7a0284df-8bde-48b6-9e34-3f2528dcdba7.europe-west3-0.gcp.cloud.qdrant.io:6333"
+        qdrant_api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.uDGc0_umW-4NwCfOTcbcT7bupSDIo0MmbQU5dXILWiM"
         session_state["qdrant_client"] = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)    
 
 else:
