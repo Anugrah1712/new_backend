@@ -26,9 +26,9 @@ app = FastAPI()
 # Allow frontend to access backend
 # Add all your Vercel frontend URLs
 origins = [
-    "https://rag-chatbot-dusky.vercel.app",
-    "https://rag-chatbot-anugrah-mishra-s-projects.vercel.app",
-    "https://rag-chatbot-git-main-anugrah-mishra-s-projects.vercel.app",
+    "https://rag-chatbot-frontend-xi.vercel.app",
+    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
     "http://localhost:3000",  # Allow local testing
 ]
 
