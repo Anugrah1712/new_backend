@@ -16,6 +16,7 @@ from pinecone import Pinecone
 import os 
 from dotenv import load_dotenv
 import weaviate
+from fastapi.responses import JSONResponse
 
 # Load environment variables from .env file
 load_dotenv()
@@ -91,6 +92,14 @@ else:
         "selected_chat_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "messages": []
     }
+
+@app.options("/preprocess")
+async def preflight():
+    return JSONResponse(content={"message": "Preflight OK"}, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "*"
+    })
 
 @app.post("/preprocess")
 async def preprocess(
