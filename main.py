@@ -30,7 +30,8 @@ app.add_middleware(
         "http://localhost:3000", 
         "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
         "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
-        "https://rag-chatbot-frontend-zeta.vercel.app"
+        "https://rag-chatbot-frontend-zeta.vercel.app",
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["*"],
