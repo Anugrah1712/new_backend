@@ -24,14 +24,21 @@ app = FastAPI()
 
 
 # Allow frontend to access backend
+# Add all your Vercel frontend URLs
+origins = [
+    "https://rag-chatbot-dusky.vercel.app",
+    "https://rag-chatbot-anugrah-mishra-s-projects.vercel.app",
+    "https://rag-chatbot-git-main-anugrah-mishra-s-projects.vercel.app",
+    "http://localhost:3000",  # Allow local testing
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 
 # File path for saved session state
