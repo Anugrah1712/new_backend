@@ -17,6 +17,9 @@ import os
 from dotenv import load_dotenv
 import weaviate
 from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -227,10 +230,15 @@ async def select_chat_model(chat_model: str = Form(...)):
     print(f"✅ Selected Chat Model: {chat_model} (Saved to session state)\n")
     return {"message": f"Selected Chat Model: {chat_model}"}
 
+class ChatRequest(BaseModel):
+    prompt: str
 
 @app.post("/chat")
 async def chat_with_bot(prompt: str = Form(...)):
     """ Chatbot interaction """
+
+    prompt = request.prompt  # Extract prompt from JSON request body
+
     if not session_state["preprocessing_done"]:
         raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
 
@@ -246,11 +254,7 @@ async def chat_with_bot(prompt: str = Form(...)):
     vs = session_state.get("vs", None)
     qdrant_client = session_state.get("qdrant_client", None)
 
-    # # ✅ Ensure Pinecone index is reloaded if needed
-    # if session_state["selected_vectordb"] == "Pinecone" and pinecone_index_name:
-    #     pinecone = Pinecone(api_key=os.getenv("PINECONE_API_KEY"), environment="us-east-1")
-    #     session_state["pinecone_index"] = pinecone.Index(pinecone_index_name)
-    # Run inference
+  
     try:
         response = inference(
         session_state["selected_vectordb"],
@@ -282,8 +286,7 @@ async def reset_chat():
     session_state["index"] = None
     session_state["docstore"] = None
     session_state["embedding_model_global"] = None
-    # session_state["pinecone_index"] = None
-    # session_state["vs"] = None
+
 
     # Delete the saved session file
     if os.path.exists(PICKLE_FILE_PATH):
