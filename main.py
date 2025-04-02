@@ -51,7 +51,7 @@ if os.path.exists(PICKLE_FILE_PATH):
 
     # Reinitialize Pinecone dynamically
     if session_state.get("pinecone_index_name"):
-        pinecone = Pinecone(api_key=os.getenv("PINECONE_API_KEY"), environment="us-east-1")
+        pinecone = Pinecone(api_key="pcsk_42Yw14_EaKdaMLiAJfWub3s2sEJYPW3jyXXjdCYkH8Mh8rD8wWJ3pS6oCCC9PGqBNuDTuf", environment="us-east-1")
         session_state["pinecone_index"] = pinecone.Index(session_state["pinecone_index_name"])
 
     # ✅ Ensure last selected vector DB and chat model are retained
@@ -60,8 +60,8 @@ if os.path.exists(PICKLE_FILE_PATH):
 
         # ✅ Initialize Weaviate Client if Needed
     if session_state.get("vs"):
-        weaviate_url = os.getenv("WEAVIATE_URL")
-        weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+        weaviate_url = "https://n7v1k2wxqnk4uaqwu4gaxg.c0.asia-southeast1.gcp.weaviate.cloud"
+        weaviate_api_key = "4zMmRnEgkX42PNGLYGQMpyFdqpxD5sDkhZL0"
         session_state["weaviate_client"] = weaviate.connect_to_weaviate_cloud(
             cluster_url=weaviate_url,
             auth_credentials=weaviate.AuthApiKey(weaviate_api_key),
@@ -145,7 +145,7 @@ async def preprocess(
                 "index": index,
                 "docstore": docstore,
                 "embedding_model_global": embedding_model_global,
-                "pinecone_index_name": pinecone_index_name,  # ✅ Now correctly defined
+                "pinecone_index_name": pinecone_index_name,  
                 "vs": vs ,
                 "qdrant_client": qdrant_client
             })
@@ -216,8 +216,6 @@ async def select_chat_model(chat_model: str = Form(...)):
 
     print(f"✅ Selected Chat Model: {chat_model} (Saved to session state)\n")
     return {"message": f"Selected Chat Model: {chat_model}"}
-
-
 
 
 @app.post("/chat")

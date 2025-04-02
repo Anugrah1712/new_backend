@@ -72,7 +72,7 @@ async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data):
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap)
     text_chunks = text_splitter.split_documents(docs)
-    # print(text_chunks)
+    print(text_chunks)
     return text_chunks
 
 def preprocess_chroma(text, embedding_model_name, persist_directory):
@@ -126,8 +126,8 @@ def preprocess_weaviate(text, embedding_model_name):
 
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
 
-    weaviate_url = "https://vontrurrcw0j8trbe1bgg.c0.asia-southeast1.gcp.weaviate.cloud"
-    weaviate_api_key = "HItChKQ5GsEQAqK1oH8OlbWnx398b1yEUzLy"
+    weaviate_url = "https://n7v1k2wxqnk4uaqwu4gaxg.c0.asia-southeast1.gcp.weaviate.cloud"
+    weaviate_api_key = "4zMmRnEgkX42PNGLYGQMpyFdqpxD5sDkhZL0"
 
 
     client = weaviate.connect_to_weaviate_cloud(
