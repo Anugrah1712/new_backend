@@ -16,7 +16,7 @@ from pinecone import Pinecone
 import os 
 from dotenv import load_dotenv
 import weaviate
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -226,17 +226,21 @@ async def select_chat_model(chat_model: str = Form(...)):
     print(f"✅ Selected Chat Model: {chat_model} (Saved to session state)\n")
     return {"message": f"Selected Chat Model: {chat_model}"}
 
+# Define request model for JSON input
 class ChatRequest(BaseModel):
     prompt: str
 
-@app.post("/chat", response_class=PlainTextResponse)
+@app.post("/chat")
 async def chat_with_bot(request: ChatRequest):
     """ Chatbot interaction """
-    if not session_state["preprocessing_done"]:
+    if not session_state.get("preprocessing_done", False):
         raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
 
     session_state["selected_vectordb"] = session_state.get("selected_vectordb", "FAISS")
     session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
+
+    # Ensure session_state["messages"] is initialized
+    session_state.setdefault("messages", [])
 
     # Store user message
     session_state["messages"].append({"role": "user", "content": request.prompt})
@@ -245,7 +249,6 @@ async def chat_with_bot(request: ChatRequest):
     vs = session_state.get("vs", None)
     qdrant_client = session_state.get("qdrant_client", None)
 
-    # Run inference
     try:
         response = inference(
             session_state["selected_vectordb"],
@@ -262,7 +265,8 @@ async def chat_with_bot(request: ChatRequest):
         session_state["messages"].append({"role": "assistant", "content": response})
 
         print(f"🤖 Chatbot Response: {response}\n")
-        return {"response": response}   # Returning plain text response
+
+        return JSONResponse(content={"response": response})
 
     except Exception as e:
         print(f"❌ Error in inference: {str(e)}\n")
