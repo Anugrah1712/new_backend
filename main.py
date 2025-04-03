@@ -16,7 +16,7 @@ from pinecone import Pinecone
 import os 
 from dotenv import load_dotenv
 import weaviate
-from fastapi.responses import JSONResponse
+from fastapi.responses import PlainTextResponse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -89,13 +89,13 @@ else:
         "messages": []
     }
 
-@app.options("/preprocess")
-async def preflight():
-    return JSONResponse(content={"message": "Preflight OK"}, headers={
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "*"
-    })
+# @app.options("/preprocess")
+# async def preflight():
+#     return JSONResponse(content={"message": "Preflight OK"}, headers={
+#         "Access-Control-Allow-Origin": "*",
+#         "Access-Control-Allow-Methods": "POST, OPTIONS",
+#         "Access-Control-Allow-Headers": "*"
+#     })
 
 @app.post("/preprocess")
 async def preprocess(
@@ -226,19 +226,14 @@ async def select_chat_model(chat_model: str = Form(...)):
 class ChatRequest(BaseModel):
     prompt: str
 
-@app.post("/chat")
+@app.post("/chat", response_class=PlainTextResponse)
 async def chat_with_bot(prompt: str = Form(...)):
     """ Chatbot interaction """
-
-    prompt = request.prompt  # Extract prompt from JSON request body
-
     if not session_state["preprocessing_done"]:
         raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
 
     session_state["selected_vectordb"] = session_state.get("selected_vectordb", "FAISS")
     session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
-
-
 
     # Store user message
     session_state["messages"].append({"role": "user", "content": prompt})
@@ -247,24 +242,24 @@ async def chat_with_bot(prompt: str = Form(...)):
     vs = session_state.get("vs", None)
     qdrant_client = session_state.get("qdrant_client", None)
 
-  
+    # Run inference
     try:
         response = inference(
-        session_state["selected_vectordb"],
-        session_state["selected_chat_model"],
-        prompt,
-        session_state["embedding_model_global"],
-        session_state["messages"],
-        pinecone_index_name,
-        vs,
-        qdrant_client
+            session_state["selected_vectordb"],
+            session_state["selected_chat_model"],
+            prompt,
+            session_state["embedding_model_global"],
+            session_state["messages"],
+            pinecone_index_name,
+            vs,
+            qdrant_client
         )
 
         # Store assistant response
         session_state["messages"].append({"role": "assistant", "content": response})
 
         print(f"🤖 Chatbot Response: {response}\n")
-        return {"response": response}
+        return response  # Returning plain text response
 
     except Exception as e:
         print(f"❌ Error in inference: {str(e)}\n")

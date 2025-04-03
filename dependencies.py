@@ -4,7 +4,6 @@ def install_dependencies():
 
     commands = [
 
-        "pip install pinecone-client",
         "pip install chromadb langchain tiktoken",
         "pip install Chroma",
         "pip install -U langchain-community",
