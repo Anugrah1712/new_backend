@@ -27,15 +27,13 @@ load_dotenv()
 app = FastAPI()
 
 
-# Allow frontend to access backend
 # Add all your Vercel frontend URLs
 origins = [
-    "https://rag-chatbot-frontend-xi.vercel.app",
-    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
-    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
-    "http://localhost:3000",  # Allow local testing
+    "http://rag-chatbot-web.shop",
+    "https://rag-chatbot-web.shop",
+    "http://13.60.34.232:8000",
+    "http://localhost:3000"
 ]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
