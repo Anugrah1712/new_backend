@@ -33,7 +33,9 @@ origins = [
     "https://rag-chatbot-web.shop",
     "http://13.60.34.232:8000",
     "http://localhost:3000",
-    "https://rag-chatbot-frontend-xi.vercel.app"  # Added Vercel frontend URL
+    "https://rag-chatbot-frontend-three.vercel.app",
+    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app"  # Added Vercel frontend URL
 ]
 app.add_middleware(
     CORSMiddleware,
