@@ -28,7 +28,6 @@ app = FastAPI()
 
 allow_origins = [
     "http://localhost:3000",
-    "https://rag-chatbot-web.shop",
 ]
 
 app.add_middleware(
