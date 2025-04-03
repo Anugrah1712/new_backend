@@ -30,12 +30,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://rag-chatbot-frontend-xi.vercel.app",
-        "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
-        "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
-        "http://localhost:3000"
-    ],  # Explicitly list origins
+    allow_origins=["*"],  # Explicitly list origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -296,6 +291,11 @@ async def reset_chat():
 @app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {"message": "Hello, World!"}
+
+@app.get("/test-cors")
+async def test_cors():
+    return {"message": "CORS is working!"}
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Use Render's dynamic port
