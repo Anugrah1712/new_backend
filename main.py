@@ -227,7 +227,7 @@ class ChatRequest(BaseModel):
     prompt: str
 
 @app.post("/chat", response_class=PlainTextResponse)
-async def chat_with_bot(prompt: str = Form(...)):
+async def chat_with_bot(request: ChatRequest):
     """ Chatbot interaction """
     if not session_state["preprocessing_done"]:
         raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
@@ -236,7 +236,7 @@ async def chat_with_bot(prompt: str = Form(...)):
     session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
 
     # Store user message
-    session_state["messages"].append({"role": "user", "content": prompt})
+    session_state["messages"].append({"role": "user", "content": request.prompt})
 
     pinecone_index_name = session_state.get("pinecone_index_name", None)
     vs = session_state.get("vs", None)
@@ -247,7 +247,7 @@ async def chat_with_bot(prompt: str = Form(...)):
         response = inference(
             session_state["selected_vectordb"],
             session_state["selected_chat_model"],
-            prompt,
+            request.prompt,
             session_state["embedding_model_global"],
             session_state["messages"],
             pinecone_index_name,
@@ -259,7 +259,7 @@ async def chat_with_bot(prompt: str = Form(...)):
         session_state["messages"].append({"role": "assistant", "content": response})
 
         print(f"🤖 Chatbot Response: {response}\n")
-        return response  # Returning plain text response
+        return {"response": response}   # Returning plain text response
 
     except Exception as e:
         print(f"❌ Error in inference: {str(e)}\n")
