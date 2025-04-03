@@ -26,14 +26,24 @@ load_dotenv()
 
 app = FastAPI()
 
+
 # Allow frontend to access backend
+# Add all your Vercel frontend URLs
+origins = [
+    "https://rag-chatbot-frontend-xi.vercel.app",
+    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
+    "http://localhost:3000",  # Allow local testing
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Change this to match your frontend URL
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 # File path for saved session state
 PICKLE_FILE_PATH = "session_state.pkl"
@@ -86,6 +96,14 @@ else:
         "messages": []
     }
 
+# @app.options("/preprocess")
+# async def preflight():
+#     return JSONResponse(content={"message": "Preflight OK"}, headers={
+#         "Access-Control-Allow-Origin": "*",
+#         "Access-Control-Allow-Methods": "POST, OPTIONS",
+#         "Access-Control-Allow-Headers": "*"
+#     })
+
 @app.post("/preprocess")
 async def preprocess(
     doc_files: List[UploadFile] = File(...),
@@ -131,7 +149,7 @@ async def preprocess(
         # Process documents
         try:
             index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name , vs ,qdrant_client= await preprocess_vectordbs(
-            doc_files, scraped_data , embedding_model, chunk_size, chunk_overlap
+            doc_files , embedding_model, chunk_size, chunk_overlap , scraped_data
             )
 
             session_state.update({
@@ -140,7 +158,7 @@ async def preprocess(
                 "index": index,
                 "docstore": docstore,
                 "embedding_model_global": embedding_model_global,
-                "pinecone_index_name": pinecone_index_name,  # ✅ Now correctly defined
+                "pinecone_index_name": pinecone_index_name,  
                 "vs": vs ,
                 "qdrant_client": qdrant_client
             })
@@ -212,6 +230,9 @@ async def select_chat_model(chat_model: str = Form(...)):
     print(f"✅ Selected Chat Model: {chat_model} (Saved to session state)\n")
     return {"message": f"Selected Chat Model: {chat_model}"}
 
+class ChatRequest(BaseModel):
+    prompt: str
+
 @app.post("/chat")
 async def chat_with_bot(prompt: str = Form(...)):
     """ Chatbot interaction """
@@ -278,11 +299,6 @@ async def reset_chat():
 @app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {"message": "Hello, World!"}
-
-@app.get("/test-cors")
-async def test_cors():
-    return {"message": "CORS is working!"}
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Use Render's dynamic port
