@@ -43,4 +43,5 @@ ENV PORT 8000
 EXPOSE 8000
 
 # Start FastAPI app with a single worker to reduce memory usage
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--timeout-keep-alive", "300"]
+
