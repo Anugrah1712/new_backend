@@ -26,19 +26,14 @@ load_dotenv()
 
 app = FastAPI()
 
-allow_origins = [
-    "http://localhost:3000",
-]
-
+# Allow frontend to access backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,  # Explicitly list origins
+    allow_origins=["http://localhost:3000"],  # Change this to match your frontend URL
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allows all headers
 )
-
-
 
 # File path for saved session state
 PICKLE_FILE_PATH = "session_state.pkl"
@@ -91,14 +86,6 @@ else:
         "messages": []
     }
 
-# @app.options("/preprocess")
-# async def preflight():
-#     return JSONResponse(content={"message": "Preflight OK"}, headers={
-#         "Access-Control-Allow-Origin": "*",
-#         "Access-Control-Allow-Methods": "POST, OPTIONS",
-#         "Access-Control-Allow-Headers": "*"
-#     })
-
 @app.post("/preprocess")
 async def preprocess(
     doc_files: List[UploadFile] = File(...),
@@ -144,7 +131,7 @@ async def preprocess(
         # Process documents
         try:
             index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name , vs ,qdrant_client= await preprocess_vectordbs(
-            doc_files , embedding_model, chunk_size, chunk_overlap , scraped_data
+            doc_files, scraped_data , embedding_model, chunk_size, chunk_overlap
             )
 
             session_state.update({
@@ -153,7 +140,7 @@ async def preprocess(
                 "index": index,
                 "docstore": docstore,
                 "embedding_model_global": embedding_model_global,
-                "pinecone_index_name": pinecone_index_name,  
+                "pinecone_index_name": pinecone_index_name,  # ✅ Now correctly defined
                 "vs": vs ,
                 "qdrant_client": qdrant_client
             })
@@ -225,47 +212,46 @@ async def select_chat_model(chat_model: str = Form(...)):
     print(f"✅ Selected Chat Model: {chat_model} (Saved to session state)\n")
     return {"message": f"Selected Chat Model: {chat_model}"}
 
-# Define request model for JSON input
-class ChatRequest(BaseModel):
-    prompt: str
-
 @app.post("/chat")
-async def chat_with_bot(request: ChatRequest):
+async def chat_with_bot(prompt: str = Form(...)):
     """ Chatbot interaction """
-    if not session_state.get("preprocessing_done", False):
+    if not session_state["preprocessing_done"]:
         raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
 
     session_state["selected_vectordb"] = session_state.get("selected_vectordb", "FAISS")
     session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
 
-    # Ensure session_state["messages"] is initialized
-    session_state.setdefault("messages", [])
+
 
     # Store user message
-    session_state["messages"].append({"role": "user", "content": request.prompt})
+    session_state["messages"].append({"role": "user", "content": prompt})
 
     pinecone_index_name = session_state.get("pinecone_index_name", None)
     vs = session_state.get("vs", None)
     qdrant_client = session_state.get("qdrant_client", None)
 
+    # # ✅ Ensure Pinecone index is reloaded if needed
+    # if session_state["selected_vectordb"] == "Pinecone" and pinecone_index_name:
+    #     pinecone = Pinecone(api_key=os.getenv("PINECONE_API_KEY"), environment="us-east-1")
+    #     session_state["pinecone_index"] = pinecone.Index(pinecone_index_name)
+    # Run inference
     try:
         response = inference(
-            session_state["selected_vectordb"],
-            session_state["selected_chat_model"],
-            request.prompt,
-            session_state["embedding_model_global"],
-            session_state["messages"],
-            pinecone_index_name,
-            vs,
-            qdrant_client
+        session_state["selected_vectordb"],
+        session_state["selected_chat_model"],
+        prompt,
+        session_state["embedding_model_global"],
+        session_state["messages"],
+        pinecone_index_name,
+        vs,
+        qdrant_client
         )
 
         # Store assistant response
         session_state["messages"].append({"role": "assistant", "content": response})
 
         print(f"🤖 Chatbot Response: {response}\n")
-
-        return JSONResponse(content={"response": response})
+        return {"response": response}
 
     except Exception as e:
         print(f"❌ Error in inference: {str(e)}\n")
