@@ -27,22 +27,20 @@ load_dotenv()
 app = FastAPI()
 
 
-# Allow frontend to access backend
-# Add all your Vercel frontend URLs
-origins = [
-    "https://rag-chatbot-frontend-xi.vercel.app",
-    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
-    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
-    "http://localhost:3000",  # Allow local testing
-]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "https://rag-chatbot-frontend-xi.vercel.app",
+        "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+        "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
+        "http://localhost:3000"
+    ],  # Explicitly list origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 # File path for saved session state
@@ -298,15 +296,6 @@ async def reset_chat():
 @app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {"message": "Hello, World!"}
-
-# import gc
-
-# @app.middleware("http")
-# async def clear_memory_middleware(request: Request, call_next):
-#     response = await call_next(request)
-#     gc.collect()  # Free up memory
-#     return response
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Use Render's dynamic port
