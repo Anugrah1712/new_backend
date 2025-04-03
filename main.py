@@ -26,11 +26,14 @@ load_dotenv()
 
 app = FastAPI()
 
-
+allow_origins = [
+    "http://localhost:3000",
+    "https://rag-chatbot-web.shop",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://rag-chatbot-web.shop"],  # Explicitly list origins
+    allow_origins=allow_origins,  # Explicitly list origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
