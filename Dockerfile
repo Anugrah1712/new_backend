@@ -27,13 +27,14 @@ RUN python -m venv /app/venv
 
 # Activate virtual environment
 ENV PATH="/app/venv/bin:$PATH"
+
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright (Use headless mode to save memory)
-RUN python -m playwright install --with-deps 
+# Run crawl4ai setup script (installs Playwright browser deps)
+RUN python -m crawl4ai.setup
 
 # Copy the entire project
 COPY . .
