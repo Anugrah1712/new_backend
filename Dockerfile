@@ -34,7 +34,7 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run crawl4ai setup script (installs Playwright browser deps)
-RUN python -m crawl4ai.setup
+RUN /app/venv/bin/python -m crawl4ai.setup
 
 # Copy the entire project
 COPY . .
