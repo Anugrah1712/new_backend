@@ -1,193 +1,124 @@
-# webscrape.py
-
 import os
 import asyncio
 import pickle
 import hashlib
-from playwright.async_api import async_playwright
+from crawl4ai import AsyncWebCrawler
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load API key
 load_dotenv()
-
-# Configure Gemini API
 genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
 
-# Pickle file paths
+# Gemini model setup
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash-8b",
+    generation_config={
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "top_k": 40,
+        "max_output_tokens": 8192,
+        "response_mime_type": "text/plain",
+    },
+)
+
+# Caching paths
 WEB_SCRAPE_PICKLE = "scraped_data.pkl"
 LINKS_HASH_FILE = "links_hash.pkl"
 
-# Gemini API Configuration
-generation_config = {
-    "temperature": 1,
-    "top_p": 0.95,
-    "top_k": 40,
-    "max_output_tokens": 8192,
-    "response_mime_type": "text/plain",
-}
+# # Save raw markdown/html dump
+# def save_structured_content_to_file(link, content):
+#     os.makedirs("raw_structured_dumps", exist_ok=True)
+#     filename_hash = hashlib.md5(link.encode()).hexdigest()
+#     file_path = os.path.join("raw_structured_dumps", f"structured_{filename_hash}.txt")
+#     with open(file_path, "w", encoding="utf-8") as f:
+#         f.write(content)
+#     print(f"📄 Saved raw structured content to {file_path}")
 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash-8b",
-    generation_config=generation_config,
-)
-
-async def convert_table_to_sentences_gemini(tables):
-    """Converts tables into descriptive sentences using Gemini API."""
-    print("\n[INFO] Sending tables to Gemini for conversion to sentences...\n")
-
-    if not tables:
-        return "No tables found on the page."
-
-    table_input = "\n\n".join(
-        [f"Table {i}:\n" + "\n".join([" | ".join(row) for row in data]) for i, data in enumerate(tables, 1)]
-    )
-
-    chat_session = model.start_chat()
-    response = chat_session.send_message(f"Convert these tables to descriptive sentences:\n{table_input}")
-
-    return response.text if response else "No response from Gemini API"
-
-async def scrape_web_data(links=None):
-    """Scrapes web data from given links and caches results. Uses cache if no new links are provided."""
-    
-    # If no new links are provided, load from cache
+# Scraper function
+async def scrape_web_data(links=None, use_markdown=True):
     if not links and os.path.exists(WEB_SCRAPE_PICKLE):
         with open(WEB_SCRAPE_PICKLE, "rb") as f:
             cached_text = pickle.load(f)
-            print("✅ No new links provided. Loaded cached data!")
-            return cached_text  # ✅ Ensure it returns a string, not a list
+            print("✅ Loaded cached data!")
+            return cached_text
 
-    # Compute a hash for the current set of links
     new_links_str = ",".join(links) if links else ""
     new_hash = hashlib.md5(new_links_str.encode()).hexdigest()
 
-    # Check if the previous hash exists and matches
     if os.path.exists(LINKS_HASH_FILE):
         with open(LINKS_HASH_FILE, "rb") as f:
             old_hash = pickle.load(f)
-
         if new_hash == old_hash and os.path.exists(WEB_SCRAPE_PICKLE):
             with open(WEB_SCRAPE_PICKLE, "rb") as f:
                 cached_text = pickle.load(f)
-                print("✅ No changes detected in links. Loaded cached data!")
-                return cached_text  # ✅ Return as string
+                print("✅ No link change. Loaded cached data!")
+                return cached_text
 
-    print("[INFO] Starting web scraping...\n")
+    print("[INFO] Starting web scraping...")
     scraped_text = ""
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)  # Run in headless mode for performance
-        page = await browser.new_page()
-
+    async with AsyncWebCrawler() as crawler:
         for link in links:
-            print(f"[INFO] Navigating to {link}\n")
             try:
-                await page.goto(link, timeout=120000, wait_until="domcontentloaded")
+                print(f"[INFO] Crawling: {link}")
+                result = await crawler.arun(url=link)
+                structured_content = result.markdown if use_markdown else result.html
+                structured_content = structured_content or "No content extracted."
 
-                # Extract Full Page Text
-                body_text = await page.evaluate("document.body.innerText")
-                print("[INFO] Extracting full page content...\n")
+                # save_structured_content_to_file(link, structured_content)
 
-                # Extract Tables
-                tables = await extract_tables(page)
-                print(tables)
-                # Convert tables to descriptive sentences
-                table_sentences = await convert_table_to_sentences_gemini(tables)
-                print(table_sentences)
-                # Extract FAQs
-                faqs = await extract_faqs(page)
-                faq_text = "\n\n".join([f"Q: {faq['question']}\nA: {faq['answer']}" for faq in faqs])
+                # 🔍 Prompt 1: Exhaustive table-wise breakdown
+                table_prompt = (
+                    "You are analyzing a web page with interest rate tables. "
+                    "For EACH table in the content below, write a full breakdown. For each table:\n"
+                    "- Mention the heading/title\n"
+                    "- Explain each column (tenure, rate, payout frequency, etc.)\n"
+                    "- Describe values (e.g. '6.75% interest for 18 months FD with monthly payout')\n"
+                    "- Call out special cases like highest rate, eligibility criteria, etc.\n"
+                    "- DO NOT compare tables; treat them as separate blocks.\n\n"
+                    "Below is the page content:\n\n"
+                    + structured_content
+                )
+                table_response = model.generate_content(table_prompt)
+                table_details = table_response.text if table_response else "❌ Table breakdown failed."
 
-                # Concatenate all extracted content into a single string
-                scraped_text += f"\n\n--- Page Content from {link} ---\n{body_text[:1000]}\n\nTables:\n{table_sentences}\n\nFAQs:\n{faq_text}\n\n"
-                print(scraped_text)
+                # 🔍 Prompt 2: Extract up to 20 FAQs
+                faq_prompt = (
+                    "From the content below, extract up to 20 Frequently Asked Questions (FAQs). "
+                    "Include both questions found in the content and logical questions a user might ask. Format:\n"
+                    "Q: <question>\nA: <answer>\n\n"
+                    "Content:\n\n" + structured_content
+                )
+                faq_response = model.generate_content(faq_prompt)
+                faq_text = faq_response.text if faq_response else "❌ FAQ extraction failed."
+
+                # 🔗 Combine results
+                scraped_text += (
+                    f"\n\n--- Scraped Content from: {link} ---\n"
+                    f"\n📑 Raw Content Preview (first 1000 chars):\n{structured_content[:1000]}...\n"
+                    f"\n📘 Detailed Table Breakdown:\n{table_details}\n"
+                    f"\n❓ FAQs:\n{faq_text}\n"
+                    f"\n--- END OF PAGE ---\n"
+                )
+
             except Exception as e:
-                print(f"[ERROR] Failed to scrape {link}: {e}")
-
-        await browser.close()
-
-    # Save new scraped data to cache
+                print(f"[ERROR] Failed to process {link}: {e}")
+    # Cache result
     with open(WEB_SCRAPE_PICKLE, "wb") as f:
         pickle.dump(scraped_text, f)
-        print("💾 New scraped data saved to cache!")
+        print("💾 Saved new scraped data to cache.")
 
-    # Update hash file
     with open(LINKS_HASH_FILE, "wb") as f:
         pickle.dump(new_hash, f)
 
-    return scraped_text  # ✅ Return as a single string
+    return scraped_text
 
-async def extract_tables(page):
-    """Extracts tables from the webpage and returns as a formatted string."""
-    print("\n[INFO] Extracting tables...\n")
-    tables = await page.query_selector_all("table")
-    table_data = []
-
-    for i, table in enumerate(tables, 1):
-        rows = await table.query_selector_all("tr")
-        table_content = []
-
-        for row in rows:
-            columns = await row.query_selector_all("td, th")  # Include headers
-            column_text = [await column.inner_text() for column in columns]
-            column_text = [text.strip() for text in column_text if text.strip()]
-            if column_text:
-                table_content.append(column_text)
-
-        if table_content:
-            table_data.append(table_content)
-
-    # Convert table data to a readable string
-    if table_data:
-        return "\n\n".join(
-            [f"Table {i}:\n" + "\n".join([" | ".join(row) for row in table]) for i, table in enumerate(table_data, 1)]
-        )
-    
-    return "No tables found."
-
-async def extract_faqs(page):
-    """Extracts FAQs from the page and returns as a list of dictionaries."""
-    print("\n[INFO] Extracting FAQs...\n")
-    faq_container = await page.query_selector(".faqs.aem-GridColumn.aem-GridColumn--default--12")
-
-    if not faq_container:
-        return []
-
-    all_faqs = []
-
-    for _ in range(10):  # Avoid infinite loop
-        show_more_button = await faq_container.query_selector(".accordion_toggle_show-more")
-        if show_more_button and await show_more_button.is_visible():
-            await show_more_button.click()
-            await page.wait_for_timeout(1000)
-        else:
-            break
-
-    toggle_buttons = await faq_container.query_selector_all(".accordion_toggle, .accordion_row")
-
-    for button in toggle_buttons:
-        try:
-            await button.click()
-            await page.wait_for_timeout(1000)
-            expanded_content = await faq_container.query_selector_all(".accordion_body, .accordionbody_links, .aem-rte-content")
-            for content in expanded_content:
-                text = await content.inner_text()
-                text = text.strip()
-                if text and text not in [faq['answer'] for faq in all_faqs]:
-                    question = await button.inner_text()
-                    question = question.strip()
-                    if question:
-                        all_faqs.append({"question": question, "answer": text})
-        except Exception as e:
-            print(f"[ERROR] Error extracting FAQs: {e}")
-
-    return all_faqs
-
-# Run the scraper
+# Runner
 async def main():
-    scraped_data = await scrape_web_data()  
-    print("\nScraped Data:\n", scraped_data)
+    final_data = await scrape_web_data()
+    print("\n✅ Final Output Preview:\n", final_data[:2000])  # Show first 2K chars
+    print("\n ✅ <----------------------------------------------------Final output preview ends here------------------------------------------------------------------>✅ ")
 
 if __name__ == "__main__":
     asyncio.run(main())

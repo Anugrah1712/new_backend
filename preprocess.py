@@ -9,9 +9,8 @@ from playwright.async_api import async_playwright
 import os 
 from dotenv import load_dotenv
 from io import BytesIO
-
 import os 
-from dotenv import load_dotenv
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -60,10 +59,25 @@ async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data):
         #             print(f"Failed to process link {link}: {link_error}")
 
         #     await browser.close()  # <-- Await browser close
+    print(f"📄 Total paragraphs after split: {len(paragraphs)}")
+    print("🧩 First 5 extracted paragraphs:")
+    for i, p in enumerate(paragraphs[:5]):
+        print(f"{i+1}. {p[:100]}...")
+    
+    print("✅ <----------------------------------------------Scraped Data from Webscraping starts here--------------------------->✅ ")
+    print(scraped_data)
+    print("✅ <----------------------------------------------Scraped Data from Webscraping ends here----------------------------->✅ ")
+    print("\n✅ Final Scraped Data Output (truncated):\n", scraped_data[:2000])
+
+    print("\n✅ Final Scraped Data Output ends here :\n")
+
 
     if scraped_data:
-        print(f"✅ Adding {len(scraped_data)} scraped web pages to preprocessing.")
-        paragraphs.extend(scraped_data)
+        if isinstance(scraped_data, str):
+            paragraphs.extend(scraped_data.split("\n\n"))  # Break on double newline
+        elif isinstance(scraped_data, list):
+            paragraphs.extend(scraped_data)
+
 
     paragraphs = [para.strip() for para in paragraphs if para.strip()]
     # print(paragraphs)
@@ -72,7 +86,7 @@ async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data):
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap)
     text_chunks = text_splitter.split_documents(docs)
-    print(text_chunks)
+    # print(text_chunks)
     return text_chunks
 
 def preprocess_chroma(text, embedding_model_name, persist_directory):
@@ -238,7 +252,7 @@ def preprocess_qdrant(text, embedding_model_name):
             ]
         )
 
-    print(f"✅ Qdrant: {len(texts)} documents stored in `{collection_name}` collection.")
+    # print(f"✅ Qdrant: {len(texts)} documents stored in `{collection_name}` collection.")
 
     return client  # ✅ Return Qdrant Client
 
@@ -259,7 +273,8 @@ async def preprocess_vectordbs(files: list[UploadFile], embedding_model_name, si
     persist_directory = 'db'
 
     embedding_model_global = SentenceTransformerEmbeddings(model_name=embedding_model_name)
-
+    print(f"✅ Total chunks created from scraped+doc input: {len(text)}")
+    
     print("Processing Chroma DB...")
     vectordb, retriever = preprocess_chroma(text, embedding_model_name, persist_directory)
     

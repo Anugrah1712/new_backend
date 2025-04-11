@@ -22,3 +22,5 @@ webdriver-manager
 pinecone
 google-generativeai
 python-multipart
+crawl4ai
+crawl4ai-setup

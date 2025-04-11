@@ -97,13 +97,6 @@ else:
         "messages": []
     }
 
-# @app.options("/preprocess")
-# async def preflight():
-#     return JSONResponse(content={"message": "Preflight OK"}, headers={
-#         "Access-Control-Allow-Origin": "*",
-#         "Access-Control-Allow-Methods": "POST, OPTIONS",
-#         "Access-Control-Allow-Headers": "*"
-#     })
 
 @app.post("/preprocess")
 async def preprocess(
@@ -142,6 +135,7 @@ async def preprocess(
                 print("🌐 Scraping web data...")
                 scraped_data = await scrape_web_data(links_list)
                 print("✅ Web scraping completed!\n")
+                print(scraped_data[:1000])
             except Exception as e:
                 print(f"❌ Web scraping failed: {str(e)}\n")
                 raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
@@ -243,8 +237,6 @@ async def chat_with_bot(prompt: str = Form(...)):
     session_state["selected_vectordb"] = session_state.get("selected_vectordb", "FAISS")
     session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
 
-
-
     # Store user message
     session_state["messages"].append({"role": "user", "content": prompt})
 
@@ -252,11 +244,6 @@ async def chat_with_bot(prompt: str = Form(...)):
     vs = session_state.get("vs", None)
     qdrant_client = session_state.get("qdrant_client", None)
 
-    # # ✅ Ensure Pinecone index is reloaded if needed
-    # if session_state["selected_vectordb"] == "Pinecone" and pinecone_index_name:
-    #     pinecone = Pinecone(api_key=os.getenv("PINECONE_API_KEY"), environment="us-east-1")
-    #     session_state["pinecone_index"] = pinecone.Index(pinecone_index_name)
-    # Run inference
     try:
         response = inference(
         session_state["selected_vectordb"],
