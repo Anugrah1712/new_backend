@@ -43,5 +43,5 @@ COPY . .
 ENV PORT 8000
 EXPOSE 8000
 
-# Start FastAPI app with a single worker to reduce memory usage
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Start FastAPI app with a single worker and increased upload size
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --limit-max-request-size 100"]

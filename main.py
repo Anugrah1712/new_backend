@@ -98,10 +98,6 @@ else:
         "messages": []
     }
 
-@app.options("/preprocess")
-async def options_preprocess():
-    return Response(status_code=200)
-
 @app.post("/preprocess")
 async def preprocess(
     doc_files: List[UploadFile] = File(...),
