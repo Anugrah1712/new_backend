@@ -19,6 +19,7 @@ import weaviate
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.responses import Response
 
 
 # Load environment variables from .env file
@@ -97,6 +98,9 @@ else:
         "messages": []
     }
 
+@app.options("/preprocess")
+async def options_preprocess():
+    return Response(status_code=200)
 
 @app.post("/preprocess")
 async def preprocess(
