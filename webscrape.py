@@ -27,13 +27,13 @@ WEB_SCRAPE_PICKLE = "scraped_data.pkl"
 LINKS_HASH_FILE = "links_hash.pkl"
 
 # # Save raw markdown/html dump
-# def save_structured_content_to_file(link, content):
-#     os.makedirs("raw_structured_dumps", exist_ok=True)
-#     filename_hash = hashlib.md5(link.encode()).hexdigest()
-#     file_path = os.path.join("raw_structured_dumps", f"structured_{filename_hash}.txt")
-#     with open(file_path, "w", encoding="utf-8") as f:
-#         f.write(content)
-#     print(f"📄 Saved raw structured content to {file_path}")
+def save_structured_content_to_file(link, content):
+    os.makedirs("raw_structured_dumps", exist_ok=True)
+    filename_hash = hashlib.md5(link.encode()).hexdigest()
+    file_path = os.path.join("raw_structured_dumps", f"structured_{filename_hash}.txt")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"📄 Saved raw structured content to {file_path}")
 
 # Scraper function
 async def scrape_web_data(links=None, use_markdown=True):
@@ -66,20 +66,25 @@ async def scrape_web_data(links=None, use_markdown=True):
                 structured_content = result.markdown if use_markdown else result.html
                 structured_content = structured_content or "No content extracted."
 
-                # save_structured_content_to_file(link, structured_content)
+                save_structured_content_to_file(link, structured_content)
 
                 # 🔍 Prompt 1: Exhaustive table-wise breakdown
                 table_prompt = (
-                    "You are analyzing a web page with interest rate tables. "
-                    "For EACH table in the content below, write a full breakdown. For each table:\n"
-                    "- Mention the heading/title\n"
-                    "- Explain each column (tenure, rate, payout frequency, etc.)\n"
-                    "- Describe values (e.g. '6.75% interest for 18 months FD with monthly payout')\n"
-                    "- Call out special cases like highest rate, eligibility criteria, etc.\n"
-                    "- DO NOT compare tables; treat them as separate blocks.\n\n"
-                    "Below is the page content:\n\n"
-                    + structured_content
+                    "You are analyzing a web page with one or more interest rate tables related to Fixed Deposits (FDs). "
+                    "For EACH table in the content below:\n"
+                    "- Mention the table's heading/title or any label that identifies the table (e.g. 'FD MAX', 'Senior Citizens FD')\n"
+                    "- Interpret all rows and columns precisely.\n"
+                    "- Clearly explain what each column means. For instance:\n"
+                    "    * 'At maturity (p.a.)' → Interest rate applicable at maturity\n"
+                    "    * 'Monthly (p.a.)' → Effective annual interest rate if payout is monthly\n"
+                    "- For each row, summarize the interest rate for each payout option with a concrete sentence.\n"
+                    "    Example: 'For 12–14 months tenure, monthly payout gives 7.35% per annum.'\n"
+                    "- Highlight the highest available rate in the table and the corresponding tenure/payout.\n"
+                    "- Do NOT compare across tables. Each table should be explained independently.\n"
+                    "- If applicable, explain eligibility criteria mentioned above or near the table.\n\n"
+                    "Here is the content:\n\n" + structured_content
                 )
+
                 table_response = model.generate_content(table_prompt)
                 table_details = table_response.text if table_response else "❌ Table breakdown failed."
 
