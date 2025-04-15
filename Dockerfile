@@ -1,13 +1,13 @@
-# Use a slim Python image to reduce memory footprint
+# Use slim Python base image
 FROM python:3.10-slim
 
 # Set working directory
 WORKDIR /app
 
-# Set non-interactive mode
+# Non-interactive to avoid prompts
 ARG DEBIAN_FRONTEND=noninteractive
 
-# Install only essential dependencies
+# Install Playwright dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -20,28 +20,33 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libjpeg-dev \
     libxshmfence1 \
+    libxcomposite1 \
+    libxrandr2 \
+    libxdamage1 \
+    libxfixes3 \
+    libxext6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxss1 \
+    libxtst6 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
-
-# Install virtualenv and create a venv
-RUN python -m venv /app/venv
-
-# Activate virtual environment
-ENV PATH="/app/venv/bin:$PATH"
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Run crawl4ai setup script (installs Playwright browser deps)
-RUN /app/venv/bin/python -m crawl4ai.setup
+# Install Playwright browsers (chromium)
+RUN playwright install chromium
 
-# Copy the entire project
+# Copy the full project
 COPY . .
 
-# Use dynamic port for Render
+# For Render or other dynamic port environments
 ENV PORT 8000
 EXPOSE 8000
 
-# Start FastAPI app with a single worker and increased upload size
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --limit-max-request-size 100"]
+# Start FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
