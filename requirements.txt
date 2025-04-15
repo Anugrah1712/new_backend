@@ -15,7 +15,7 @@ qdrant-client
 pymilvus
 weaviate-client
 langchain-weaviate
-playwright
+playwright>=1.49.0
 PyPDF2
 undetected-chromedriver
 webdriver-manager
