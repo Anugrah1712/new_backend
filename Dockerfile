@@ -20,18 +20,15 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libjpeg-dev \
     libxshmfence1 \
-    libxcomposite1 \
-    libxrandr2 \
-    libxdamage1 \
-    libxfixes3 \
-    libxext6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxss1 \
-    libxtst6 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatspi2.0-0 \
     xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
