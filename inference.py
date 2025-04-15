@@ -15,7 +15,7 @@ def inference_chroma(chat_model, question, retriever, chat_history):
     from langchain.chains import RetrievalQA
 
     chat_model = ChatTogether(
-        together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+        together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
         model=chat_model,
     )
 
@@ -80,7 +80,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         
         # Create chat completion
         chat_model = ChatTogether(
-            together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+            together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
             model=chat_model,
         )
         
@@ -201,7 +201,7 @@ def inference_pinecone(chat_model, question,embedding_model_global, pinecone_ind
 
             *Response:*"""
 
-  llm = ChatTogether(api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+  llm = ChatTogether(api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
                   model=chat_model,  )
 
   response = llm.predict(prompt)
@@ -217,7 +217,7 @@ def inference_weaviate(chat_model, question , vs , chat_history):
     from langchain.schema.output_parser import StrOutputParser
 
     chat_model = ChatTogether(
-        together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+        together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
         model=chat_model,
     )
 
@@ -289,7 +289,7 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
     """
 
     llm = ChatTogether(
-        api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+        api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
         model=chat_model
     )
 
