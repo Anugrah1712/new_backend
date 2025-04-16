@@ -1,36 +1,50 @@
-# Use slim Python base image
 FROM python:3.10-slim
 
-# Set working directory
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    wget \
+    unzip \
+    git \
+    libglib2.0-0 \
+    libnss3 \
+    libgconf-2-4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libxss1 \
+    libasound2 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm-dev \
+    libxshmfence-dev \
+    fonts-liberation \
+    libappindicator1 \
+    libappindicator3-1 \
+    xdg-utils \
+    ca-certificates \
+    && apt-get clean
+
+# Set work directory
 WORKDIR /app
 
-# Non-interactive to avoid prompts
-ARG DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies required by Chromium
-RUN apt-get update && apt-get install -y \
-    wget curl unzip \
-    fonts-liberation libnss3 libnspr4 libdbus-1-3 \
-    libxkbcommon0 libasound2 libjpeg-dev libxshmfence1 \
-    libatk1.0-0 libatk-bridge2.0-0 libcups2 libpango-1.0-0 \
-    libcairo2 libatspi2.0-0 xdg-utils libxcomposite1 libxdamage1 \
-    libxfixes3 libxrandr2 libgbm1 libx11-xcb1 libx11-6 libxcb1 \
-    --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# Copy your requirements
+COPY requirements.txt .
 
 # Install Python dependencies
-COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and browsers (Chromium)
-RUN playwright install --with-deps chromium
+# Install Playwright browsers
+RUN playwright install --with-deps
 
-# Copy the full project
+# Copy the rest of your code
 COPY . .
 
-# Set environment variable for FastAPI port
-ENV PORT 8000
+# Expose the port if you're running an API
 EXPOSE 8000
 
-# Start FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Default command
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
