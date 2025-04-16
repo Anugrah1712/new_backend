@@ -2,6 +2,7 @@ import os
 import asyncio
 import pickle
 import hashlib
+import shutil
 from crawl4ai import AsyncWebCrawler
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -106,20 +107,30 @@ async def scrape_web_data(links=None, use_markdown=True):
     new_links_str = ",".join(links) if links else ""
     new_hash = hashlib.md5(new_links_str.encode()).hexdigest()
 
+    old_hash = None
     if os.path.exists(LINKS_HASH_FILE):
         with open(LINKS_HASH_FILE, "rb") as f:
             old_hash = pickle.load(f)
-        if new_hash == old_hash and os.path.exists(WEB_SCRAPE_PICKLE):
-            with open(WEB_SCRAPE_PICKLE, "rb") as f:
-                cached_text = pickle.load(f)
-                print("✅ No link change. Loaded cached data!")
-                return cached_text
+
+    # Always clear Playwright state before scraping
+    print("[INFO] Cleaning up old Playwright cache...")
+    shutil.rmtree("/root/.cache/ms-playwright", ignore_errors=True)
+
+    # If hash differs, clear old cache
+    if new_hash != old_hash:
+        print("[INFO] Links changed. Deleting previous cache...")
+        if os.path.exists(WEB_SCRAPE_PICKLE):
+            os.remove(WEB_SCRAPE_PICKLE)
+        if os.path.exists(LINKS_HASH_FILE):
+            os.remove(LINKS_HASH_FILE)
 
     print("[INFO] Starting web scraping...")
 
     async with AsyncWebCrawler() as crawler:
-        tasks = [process_link(crawler, link, use_markdown) for link in links]
-        results = await asyncio.gather(*tasks)
+        results = []
+        for link in links:
+            result = await process_link(crawler, link, use_markdown)
+            results.append(result)
 
     scraped_text = "\n".join(results)
 
