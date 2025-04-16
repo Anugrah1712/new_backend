@@ -140,8 +140,8 @@ def preprocess_weaviate(text, embedding_model_name):
 
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
 
-    weaviate_url = "https://n7v1k2wxqnk4uaqwu4gaxg.c0.asia-southeast1.gcp.weaviate.cloud"
-    weaviate_api_key = "4zMmRnEgkX42PNGLYGQMpyFdqpxD5sDkhZL0"
+    weaviate_url = "https://dhdfsu2ksrmhgcmlyvmaa.c0.asia-southeast1.gcp.weaviate.cloud"
+    weaviate_api_key = "hmSgt1L0EPLzMWflJCzQGXQ1KN9xXYLwkCFc"
 
 
     client = weaviate.connect_to_weaviate_cloud(
