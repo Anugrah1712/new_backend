@@ -55,7 +55,7 @@ async def scrape_single_link(link):
     try:
         print(f"[INFO] Scraping: {link}")
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+            browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
             page = await browser.new_page()
             await page.goto(link, timeout=60000)
             await page.wait_for_timeout(3000)
