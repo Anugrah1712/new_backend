@@ -93,7 +93,7 @@ async def fetch_or_cache_data(link):
     print(f"🌐 Scraping fresh data for: {link}")
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.goto(link)
         await page.wait_for_timeout(3000)

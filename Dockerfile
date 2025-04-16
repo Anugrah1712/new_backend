@@ -25,8 +25,7 @@ RUN apt-get update && apt-get install -y \
     libappindicator3-1 \
     xdg-utils \
     ca-certificates \
-    xvfb && \
-    apt-get clean
+    && apt-get clean
 
 # Set work directory
 WORKDIR /app
@@ -47,5 +46,5 @@ COPY . .
 # Expose the port if you're running an API
 EXPOSE 8000
 
-# Default command with xvfb-run
-CMD ["xvfb-run", "--server-args=-screen 0 1024x768x24", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
