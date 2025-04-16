@@ -55,10 +55,19 @@ async def scrape_single_link(link):
     try:
         print(f"[INFO] Scraping: {link}")
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
-            page = await browser.new_page()
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                locale="en-US",
+                extra_http_headers={
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://www.google.com/"
+                }
+            )
+            page = await context.new_page()
             await page.goto(link, timeout=60000)
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(3000)  # Let dynamic content load
             content = await page.content()
             await browser.close()
 
@@ -82,6 +91,7 @@ async def scrape_single_link(link):
     except Exception as e:
         print(f"[ERROR] Failed to scrape {link}: {e}")
         return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
+
 
 # Main scrape function
 async def scrape_web_data(links=None):
