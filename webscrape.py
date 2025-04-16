@@ -112,9 +112,9 @@ async def scrape_web_data(links=None, use_markdown=True):
         with open(LINKS_HASH_FILE, "rb") as f:
             old_hash = pickle.load(f)
 
-    # Always clear Playwright state before scraping
-    print("[INFO] Cleaning up old Playwright cache...")
-    shutil.rmtree("/root/.cache/ms-playwright", ignore_errors=True)
+    # # Always clear Playwright state before scraping
+    # print("[INFO] Cleaning up old Playwright cache...")
+    # shutil.rmtree("/root/.cache/ms-playwright", ignore_errors=True)
 
     # If hash differs, clear old cache
     if new_hash != old_hash:
