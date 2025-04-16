@@ -62,34 +62,41 @@ def create_faq_prompt(structured_content):
         "Content:\n\n" + structured_content
     )
 
-# Scrape one link using crawl4ai
-async def scrape_single_link(link):
-    try:
-        print(f"[INFO] Scraping: {link}")
-        async with AsyncWebCrawler() as crawler:
-            result = await crawler.arun(url=link)
-            content = result.html or result.markdown or "No content extracted."
-        print(f"[DEBUG] Content fetched for {link}.")
 
-        save_structured_content_to_file(link, content)
+# Scrape one link using crawl4ai and retry logic
+async def scrape_single_link(link, retries=3):
+    attempt = 0
+    while attempt < retries:
+        try:
+            print(f"[INFO] Attempting to scrape: {link}, Attempt {attempt + 1}")
+            async with AsyncWebCrawler() as crawler:
+                result = await crawler.arun(url=link)
+                content = result.html or result.markdown or "No content extracted."
 
-        print(f"[DEBUG] Sending content to Gemini for table analysis...")
-        table_response = model.generate_content(create_table_prompt(content)).text
+            save_structured_content_to_file(link, content)
 
-        print(f"[DEBUG] Sending content to Gemini for FAQ extraction...")
-        faq_response = model.generate_content(create_faq_prompt(content)).text
+            table_response = model.generate_content(create_table_prompt(content)).text
+            faq_response = model.generate_content(create_faq_prompt(content)).text
 
-        return (
-            f"\n\n--- Scraped Content from: {link} ---\n"
-            f"\n📁 Raw Content Preview (first 1000 chars):\n{content[:1000]}...\n"
-            f"\n📘 Detailed Table Breakdown:\n{table_response}\n"
-            f"\n❓ FAQs:\n{faq_response}\n"
-            f"\n--- END OF PAGE ---\n"
-        )
+            print(f"[INFO] Successfully scraped: {link}")
+            return (
+                f"\n\n--- Scraped Content from: {link} ---\n"
+                f"\n📁 Raw Content Preview (first 1000 chars):\n{content[:1000]}...\n"
+                f"\n📘 Detailed Table Breakdown:\n{table_response}\n"
+                f"\n❓ FAQs:\n{faq_response}\n"
+                f"\n--- END OF PAGE ---\n"
+            )
 
-    except Exception as e:
-        print(f"[ERROR] Failed to process {link}: {e}")
-        return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
+        except Exception as e:
+            print(f"[ERROR] Failed to process {link} on attempt {attempt + 1}: {e}")
+            attempt += 1
+            if attempt < retries:
+                print("[INFO] Retrying...")
+                await asyncio.sleep(2)  # Adding a small delay before retrying
+            else:
+                print(f"[ERROR] Failed after {retries} attempts.")
+                return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
+
 
 # Main scraping function
 async def scrape_web_data(links=None):
