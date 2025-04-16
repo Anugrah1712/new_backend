@@ -2,7 +2,6 @@ import os
 import asyncio
 import pickle
 import hashlib
-import shutil
 from crawl4ai import AsyncWebCrawler
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -64,33 +63,34 @@ def create_faq_prompt(structured_content):
     )
 
 
-semaphore = asyncio.Semaphore(1)  # Limit concurrency
+semaphore = asyncio.Semaphore(1)  # Sequential control
 
-async def process_link(crawler, link, use_markdown):
+async def process_link(link, use_markdown):
     async with semaphore:
         try:
-            print(f"[INFO] Crawling: {link}")
-            result = await crawler.arun(url=link)
-            structured_content = result.markdown if use_markdown else result.html
-            structured_content = structured_content or "No content extracted."
+            async with AsyncWebCrawler() as crawler:
+                print(f"[INFO] Crawling: {link}")
+                result = await crawler.arun(url=link)
+                structured_content = result.markdown if use_markdown else result.html
+                structured_content = structured_content or "No content extracted."
 
-            save_structured_content_to_file(link, structured_content)
+                save_structured_content_to_file(link, structured_content)
 
-            table_prompt = create_table_prompt(structured_content)
-            table_response = model.generate_content(table_prompt)
-            table_details = table_response.text if table_response else "❌ Table breakdown failed."
+                table_prompt = create_table_prompt(structured_content)
+                table_response = model.generate_content(table_prompt)
+                table_details = table_response.text if table_response else "❌ Table breakdown failed."
 
-            faq_prompt = create_faq_prompt(structured_content)
-            faq_response = model.generate_content(faq_prompt)
-            faq_text = faq_response.text if faq_response else "❌ FAQ extraction failed."
+                faq_prompt = create_faq_prompt(structured_content)
+                faq_response = model.generate_content(faq_prompt)
+                faq_text = faq_response.text if faq_response else "❌ FAQ extraction failed."
 
-            return (
-                f"\n\n--- Scraped Content from: {link} ---\n"
-                f"\n📑 Raw Content Preview (first 1000 chars):\n{structured_content[:1000]}...\n"
-                f"\n📘 Detailed Table Breakdown:\n{table_details}\n"
-                f"\n❓ FAQs:\n{faq_text}\n"
-                f"\n--- END OF PAGE ---\n"
-            )
+                return (
+                    f"\n\n--- Scraped Content from: {link} ---\n"
+                    f"\n📑 Raw Content Preview (first 1000 chars):\n{structured_content[:1000]}...\n"
+                    f"\n📘 Detailed Table Breakdown:\n{table_details}\n"
+                    f"\n❓ FAQs:\n{faq_text}\n"
+                    f"\n--- END OF PAGE ---\n"
+                )
 
         except Exception as e:
             print(f"[ERROR] Failed to process {link}: {e}")
@@ -112,11 +112,6 @@ async def scrape_web_data(links=None, use_markdown=True):
         with open(LINKS_HASH_FILE, "rb") as f:
             old_hash = pickle.load(f)
 
-    # # Always clear Playwright state before scraping
-    # print("[INFO] Cleaning up old Playwright cache...")
-    # shutil.rmtree("/root/.cache/ms-playwright", ignore_errors=True)
-
-    # If hash differs, clear old cache
     if new_hash != old_hash:
         print("[INFO] Links changed. Deleting previous cache...")
         if os.path.exists(WEB_SCRAPE_PICKLE):
@@ -126,11 +121,10 @@ async def scrape_web_data(links=None, use_markdown=True):
 
     print("[INFO] Starting web scraping...")
 
-    async with AsyncWebCrawler() as crawler:
-        results = []
-        for link in links:
-            result = await process_link(crawler, link, use_markdown)
-            results.append(result)
+    results = []
+    for link in links:
+        result = await process_link(link, use_markdown)
+        results.append(result)
 
     scraped_text = "\n".join(results)
 
