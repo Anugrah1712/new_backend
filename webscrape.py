@@ -63,7 +63,7 @@ def create_faq_prompt(structured_content):
     )
 
 
-semaphore = asyncio.Semaphore(3)  # Limit concurrency
+semaphore = asyncio.Semaphore(1)  # Limit concurrency
 
 async def process_link(crawler, link, use_markdown):
     async with semaphore:
@@ -135,14 +135,9 @@ async def scrape_web_data(links=None, use_markdown=True):
 
 # Example runner
 async def main():
-    links = [
-        "https://example.com/fd1",
-        "https://example.com/fd2"
-    ]  # Replace with real URLs
-    final_data = await scrape_web_data(links=links)
+    final_data = await scrape_web_data()
     print("\n✅ Final Output Preview:\n", final_data[:2000])
     print("\n ✅ <----------------------------------------------------Final output preview ends here------------------------------------------------------------------>✅ ")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
