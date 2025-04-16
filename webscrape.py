@@ -3,7 +3,7 @@ import asyncio
 import pickle
 import hashlib
 from dotenv import load_dotenv
-from crawl4ai import AsyncWebCrawler
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 import google.generativeai as genai
 
 # Load environment variables
@@ -12,7 +12,6 @@ load_dotenv()
 genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
 print("[DEBUG] Gemini configured with API key.")
 
-# Gemini setup
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash-8b",
     generation_config={
@@ -24,11 +23,9 @@ model = genai.GenerativeModel(
     },
 )
 
-# Cache files
 WEB_SCRAPE_PICKLE = "scraped_data.pkl"
 LINKS_HASH_FILE = "links_hash.pkl"
 
-# Save structured content to file
 def save_structured_content_to_file(link, content):
     print(f"[DEBUG] Saving structured content for {link}...")
     os.makedirs("raw_structured_dumps", exist_ok=True)
@@ -37,7 +34,6 @@ def save_structured_content_to_file(link, content):
         f.write(content)
     print(f"📄 Saved structured content for {link}")
 
-# Gemini prompts
 def create_table_prompt(structured_content):
     print("[DEBUG] Creating table analysis prompt...")
     return (
@@ -62,17 +58,27 @@ def create_faq_prompt(structured_content):
         "Content:\n\n" + structured_content
     )
 
+async def playwright_scrape(url: str) -> str:
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            await page.goto(url, timeout=30000)
+            content = await page.content()
+            await browser.close()
+            return content
+    except PlaywrightTimeoutError:
+        raise Exception("Timeout while loading the page.")
+    except Exception as e:
+        raise e
 
-# Scrape one link using crawl4ai and retry logic
 async def scrape_single_link(link, retries=3):
     attempt = 0
     while attempt < retries:
         try:
             print(f"[INFO] Attempting to scrape: {link}, Attempt {attempt + 1}")
-            async with AsyncWebCrawler() as crawler:
-                result = await crawler.arun(url=link)
-                content = result.html or result.markdown or "No content extracted."
-
+            content = await playwright_scrape(link)
             save_structured_content_to_file(link, content)
 
             table_response = model.generate_content(create_table_prompt(content)).text
@@ -92,13 +98,11 @@ async def scrape_single_link(link, retries=3):
             attempt += 1
             if attempt < retries:
                 print("[INFO] Retrying...")
-                await asyncio.sleep(2)  # Adding a small delay before retrying
+                await asyncio.sleep(2)
             else:
                 print(f"[ERROR] Failed after {retries} attempts.")
                 return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
 
-
-# Main scraping function
 async def scrape_web_data(links=None):
     if not links and os.path.exists(WEB_SCRAPE_PICKLE):
         with open(WEB_SCRAPE_PICKLE, "rb") as f:
@@ -130,9 +134,6 @@ async def scrape_web_data(links=None):
     print("💾 Scraping done. Data cached.")
     return combined_text
 
-# Entry point
 if __name__ == "__main__":
-    # Example usage
-    
     print("[DEBUG] Starting script execution with example links...")
     asyncio.run(scrape_web_data())
