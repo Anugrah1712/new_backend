@@ -3,8 +3,8 @@ import asyncio
 import pickle
 import hashlib
 from dotenv import load_dotenv
-from crawl4ai import SmartScraper  # Requires crawl4ai >= 0.1.26
 import google.generativeai as genai
+from crawl4ai import CrawlerHub, CrawlerRunConfig, MarkdownGenerationResult
 
 print("[DEBUG] Loading environment variables...")
 load_dotenv()
@@ -28,8 +28,7 @@ model = genai.GenerativeModel(
 WEB_SCRAPE_PICKLE = "scraped_data.pkl"
 LINKS_HASH_FILE = "links_hash.pkl"
 
-scraper = SmartScraper()
-
+# Function to create the table prompt for Gemini
 def create_table_prompt(structured_content):
     print("[DEBUG] Creating table prompt for Gemini...")
     return (
@@ -45,6 +44,7 @@ def create_table_prompt(structured_content):
         "Here is the content:\n\n" + structured_content
     )
 
+# Function to create FAQ prompt for Gemini
 def create_faq_prompt(structured_content):
     print("[DEBUG] Creating FAQ prompt for Gemini...")
     return (
@@ -54,31 +54,45 @@ def create_faq_prompt(structured_content):
         "Content:\n\n" + structured_content
     )
 
+# New function to scrape single link using CrawlerHub
 async def scrape_single_link(link):
     try:
         print(f"[INFO] Scraping URL: {link}")
-        content = await scraper.run(link)
-        html_content = content["output"]
-        print(f"[DEBUG] Successfully scraped structured HTML from {link}. Length: {len(html_content)} characters")
+        config = CrawlerRunConfig(
+            urls=[link],
+            max_depth=1,
+            markdown=True,  # auto-generate markdown
+            llm_model="gpt-3.5-turbo",  # optional: specify if you want LLM summarization
+        )
+
+        hub = CrawlerHub(config)
+        result: list[MarkdownGenerationResult] = hub.run()
+
+        if result:
+            markdown_content = result[0].markdown
+            print(f"[DEBUG] Successfully scraped and generated markdown for {link}.")
+        else:
+            markdown_content = "No data found."
+            print(f"[DEBUG] No content generated for {link}.")
 
         filename_hash = hashlib.md5(link.encode()).hexdigest()
         os.makedirs("raw_structured_dumps", exist_ok=True)
         file_path = f"raw_structured_dumps/structured_{filename_hash}.html"
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-        print(f"[DEBUG] Saved structured HTML to {file_path}")
+            f.write(markdown_content)
+        print(f"[DEBUG] Saved structured markdown to {file_path}")
 
         print("[DEBUG] Sending table content to Gemini...")
-        table_response = model.generate_content(create_table_prompt(html_content)).text
+        table_response = model.generate_content(create_table_prompt(markdown_content)).text
         print("[DEBUG] Received table breakdown from Gemini.")
 
         print("[DEBUG] Sending FAQ content to Gemini...")
-        faq_response = model.generate_content(create_faq_prompt(html_content)).text
+        faq_response = model.generate_content(create_faq_prompt(markdown_content)).text
         print("[DEBUG] Received FAQs from Gemini.")
 
         return (
             f"\n\n--- Scraped Content from: {link} ---\n"
-            f"\n📁 Raw Content Preview (first 1000 chars):\n{html_content[:1000]}...\n"
+            f"\n📁 Raw Content Preview (first 1000 chars):\n{markdown_content[:1000]}...\n"
             f"\n📘 Table Breakdown:\n{table_response}\n"
             f"\n❓ FAQs:\n{faq_response}\n"
             f"\n--- END OF PAGE ---\n"
@@ -87,6 +101,7 @@ async def scrape_single_link(link):
         print(f"[ERROR] Failed to scrape {link}: {e}")
         return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
 
+# Function to scrape all provided links
 async def scrape_web_data(links):
     print(f"[DEBUG] Received links to scrape: {links}")
     new_links_str = ",".join(links)
@@ -121,6 +136,5 @@ async def scrape_web_data(links):
 
 if __name__ == "__main__":
     print("[DEBUG] Starting scraping execution...")
-   
-    
+    # Example: provide links here to scrape
     asyncio.run(scrape_web_data())

@@ -18,3 +18,4 @@ links_hash.pkl
 # Ignore dependency logs
 *.lock
 
+raw_structured_dumps/
