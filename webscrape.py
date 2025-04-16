@@ -2,15 +2,15 @@ import os
 import asyncio
 import pickle
 import hashlib
-from crawl4ai import AsyncWebCrawler
-import google.generativeai as genai
 from dotenv import load_dotenv
+from playwright.async_api import async_playwright
+import google.generativeai as genai
 
-# Load API key
+# Load .env and Gemini API key
 load_dotenv()
 genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
 
-# Gemini model setup
+# Gemini setup
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash-8b",
     generation_config={
@@ -22,127 +22,97 @@ model = genai.GenerativeModel(
     },
 )
 
-# Caching paths
+# Cache files
 WEB_SCRAPE_PICKLE = "scraped_data.pkl"
 LINKS_HASH_FILE = "links_hash.pkl"
 
-
+# Save content
 def save_structured_content_to_file(link, content):
     os.makedirs("raw_structured_dumps", exist_ok=True)
     filename_hash = hashlib.md5(link.encode()).hexdigest()
-    file_path = os.path.join("raw_structured_dumps", f"structured_{filename_hash}.txt")
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open(f"raw_structured_dumps/structured_{filename_hash}.html", "w", encoding="utf-8") as f:
         f.write(content)
-    print(f"📄 Saved raw structured content to {file_path}")
+    print(f"📄 Saved structured content for {link}")
 
-
-def create_table_prompt(structured_content):
+# Gemini prompts
+def create_table_prompt(content):
     return (
         "You are analyzing a web page with one or more interest rate tables related to Fixed Deposits (FDs). "
         "For EACH table in the content below:\n"
-        "- Mention the table's heading/title or any label that identifies the table (e.g. 'FD MAX', 'Senior Citizens FD')\n"
-        "- Interpret all rows and columns precisely.\n"
-        "- Clearly explain what each column means. For instance:\n"
-        "    * 'At maturity (p.a.)' → Interest rate applicable at maturity\n"
-        "    * 'Monthly (p.a.)' → Effective annual interest rate if payout is monthly\n"
-        "- For each row, summarize the interest rate for each payout option with a concrete sentence.\n"
-        "    Example: 'For 12–14 months tenure, monthly payout gives 7.35% per annum.'\n"
-        "- Highlight the highest available rate in the table and the corresponding tenure/payout.\n"
-        "- Do NOT compare across tables. Each table should be explained independently.\n"
-        "- If applicable, explain eligibility criteria mentioned above or near the table.\n\n"
-        "Here is the content:\n\n" + structured_content
+        "- Mention title\n- Explain all columns and rows\n"
+        "- Summarize payouts\n- Highlight highest rate\n- DO NOT compare tables\n\n"
+        "Here is the content:\n\n" + content
     )
 
-
-def create_faq_prompt(structured_content):
+def create_faq_prompt(content):
     return (
-        "From the content below, extract up to 20 Frequently Asked Questions (FAQs). "
-        "Include both questions found in the content and logical questions a user might ask. Format:\n"
-        "Q: <question>\nA: <answer>\n\n"
-        "Content:\n\n" + structured_content
+        "From the content below, extract up to 20 FAQs. Include logical and visible questions.\n"
+        "Format:\nQ: <question>\nA: <answer>\n\nContent:\n\n" + content
     )
 
+# Scrape one link using Playwright
+async def scrape_single_link(link):
+    try:
+        print(f"[INFO] Scraping: {link}")
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+            page = await browser.new_page()
+            await page.goto(link, timeout=60000)
+            await page.wait_for_timeout(3000)
+            content = await page.content()
+            await browser.close()
 
-semaphore = asyncio.Semaphore(1)  # Sequential control
+        save_structured_content_to_file(link, content)
 
-async def process_link(link, use_markdown):
-    async with semaphore:
-        try:
-            async with AsyncWebCrawler() as crawler:
-                print(f"[INFO] Crawling: {link}")
-                result = await crawler.arun(url=link)
-                structured_content = result.markdown if use_markdown else result.html
-                structured_content = structured_content or "No content extracted."
+        # Gemini Prompts
+        table_prompt = create_table_prompt(content)
+        table_response = model.generate_content(table_prompt).text
 
-                save_structured_content_to_file(link, structured_content)
+        faq_prompt = create_faq_prompt(content)
+        faq_response = model.generate_content(faq_prompt).text
 
-                table_prompt = create_table_prompt(structured_content)
-                table_response = model.generate_content(table_prompt)
-                table_details = table_response.text if table_response else "❌ Table breakdown failed."
+        return (
+            f"\n\n--- Scraped Content from: {link} ---\n"
+            f"\n📑 Raw Content Preview (first 1000 chars):\n{content[:1000]}...\n"
+            f"\n📘 Detailed Table Breakdown:\n{table_response}\n"
+            f"\n❓ FAQs:\n{faq_response}\n"
+            f"\n--- END OF PAGE ---\n"
+        )
 
-                faq_prompt = create_faq_prompt(structured_content)
-                faq_response = model.generate_content(faq_prompt)
-                faq_text = faq_response.text if faq_response else "❌ FAQ extraction failed."
+    except Exception as e:
+        print(f"[ERROR] Failed to scrape {link}: {e}")
+        return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
 
-                return (
-                    f"\n\n--- Scraped Content from: {link} ---\n"
-                    f"\n📑 Raw Content Preview (first 1000 chars):\n{structured_content[:1000]}...\n"
-                    f"\n📘 Detailed Table Breakdown:\n{table_details}\n"
-                    f"\n❓ FAQs:\n{faq_text}\n"
-                    f"\n--- END OF PAGE ---\n"
-                )
-
-        except Exception as e:
-            print(f"[ERROR] Failed to process {link}: {e}")
-            return f"\n\n--- Scraped Content from: {link} ---\n❌ Error: {e}\n"
-
-
-async def scrape_web_data(links=None, use_markdown=True):
+# Main scrape function
+async def scrape_web_data(links=None):
     if not links and os.path.exists(WEB_SCRAPE_PICKLE):
         with open(WEB_SCRAPE_PICKLE, "rb") as f:
-            cached_text = pickle.load(f)
-            print("✅ Loaded cached data!")
-            return cached_text
+            print("✅ Loaded cached scraped data.")
+            return pickle.load(f)
 
-    new_links_str = ",".join(links) if links else ""
+    new_links_str = ",".join(links or [])
     new_hash = hashlib.md5(new_links_str.encode()).hexdigest()
 
-    old_hash = None
     if os.path.exists(LINKS_HASH_FILE):
         with open(LINKS_HASH_FILE, "rb") as f:
             old_hash = pickle.load(f)
+        if new_hash == old_hash and os.path.exists(WEB_SCRAPE_PICKLE):
+            with open(WEB_SCRAPE_PICKLE, "rb") as f:
+                print("✅ No link change. Loaded cached data.")
+                return pickle.load(f)
 
-    if new_hash != old_hash:
-        print("[INFO] Links changed. Deleting previous cache...")
-        if os.path.exists(WEB_SCRAPE_PICKLE):
-            os.remove(WEB_SCRAPE_PICKLE)
-        if os.path.exists(LINKS_HASH_FILE):
-            os.remove(LINKS_HASH_FILE)
+    print("[INFO] Starting fresh web scraping...")
+    results = [await scrape_single_link(link) for link in links]
 
-    print("[INFO] Starting web scraping...")
-
-    results = []
-    for link in links:
-        result = await process_link(link, use_markdown)
-        results.append(result)
-
-    scraped_text = "\n".join(results)
-
+    combined_text = "\n".join(results)
     with open(WEB_SCRAPE_PICKLE, "wb") as f:
-        pickle.dump(scraped_text, f)
-        print("💾 Saved new scraped data to cache.")
-
+        pickle.dump(combined_text, f)
     with open(LINKS_HASH_FILE, "wb") as f:
         pickle.dump(new_hash, f)
 
-    return scraped_text
+    print("💾 Scraping done. Data cached.")
+    return combined_text
 
-
-# Example runner
-async def main():
-    final_data = await scrape_web_data()
-    print("\n✅ Final Output Preview:\n", final_data[:2000])
-    print("\n ✅ <----------------------------------------------------Final output preview ends here------------------------------------------------------------------>✅ ")
-
+# For direct execution
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(scrape_web_data())
