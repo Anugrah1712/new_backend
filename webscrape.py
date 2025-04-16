@@ -9,7 +9,7 @@ import google.generativeai as genai
 
 # Load API key
 load_dotenv()
-genai.configure(api_key=os.getenv("AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY"))
+genai.configure(api_key=("AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY"))
 
 # Gemini setup
 model = genai.GenerativeModel(
