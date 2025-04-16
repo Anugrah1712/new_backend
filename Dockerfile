@@ -25,8 +25,8 @@ RUN apt-get update && apt-get install -y \
     libappindicator3-1 \
     xdg-utils \
     ca-certificates \
-    xvfb \  # Add xvfb here
-    && apt-get clean
+    xvfb && \
+    apt-get clean
 
 # Set work directory
 WORKDIR /app
