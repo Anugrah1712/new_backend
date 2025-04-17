@@ -8,7 +8,7 @@ from datetime import datetime
 
 def get_current_datetime():
     ist = pytz.timezone("Asia/Kolkata") 
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
 
 def inference_chroma(chat_model, question, retriever, chat_history):
     from langchain_together import ChatTogether
