@@ -38,11 +38,7 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
-RUN apt-get install -y wget && \
-    wget https://playwright.azureedge.net/builds/playwright/rust/playwright-rust-linux-x64.tar.gz && \
-    pip install playwright && \
-    playwright install --with-deps
-
+RUN pip install playwright && playwright install --with-deps
 
 # Copy the rest of your code
 COPY . .
