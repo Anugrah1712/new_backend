@@ -3,9 +3,11 @@
 from playwright.sync_api import sync_playwright
 from langchain_core.prompts import ChatPromptTemplate
 import os 
+import pytz
 from datetime import datetime
 
 def get_current_datetime():
+    ist = pytz.timezone("Asia/Kolkata") 
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def inference_chroma(chat_model, question, retriever, chat_history):
