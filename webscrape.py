@@ -2,15 +2,24 @@ import os
 import asyncio
 import pickle
 import hashlib
-from crawl4ai import AsyncWebCrawler
-import google.generativeai as genai
 from dotenv import load_dotenv
+import google.generativeai as genai
+from crawl4ai import AsyncWebCrawler
 
-# Load API key
+# Monkey-patch Playwright args for crawl4ai
+original_init = AsyncWebCrawler.__init__
+
+def patched_init(self, *args, **kwargs):
+    if "playwright_browser_args" not in kwargs:
+        kwargs["playwright_browser_args"] = ["--no-sandbox", "--disable-setuid-sandbox"]
+    original_init(self, *args, **kwargs)
+
+AsyncWebCrawler.__init__ = patched_init
+
+# Load environment variables
 load_dotenv()
-genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
+genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")  # replace with your actual key
 
-# Gemini model setup
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash-8b",
     generation_config={
@@ -22,11 +31,9 @@ model = genai.GenerativeModel(
     },
 )
 
-# Directory for per-link scraped data
 SCRAPED_DIR = "scraped_links"
 os.makedirs(SCRAPED_DIR, exist_ok=True)
 
-# Save raw markdown/html dump
 def save_structured_content_to_file(link, content):
     os.makedirs("raw_structured_dumps", exist_ok=True)
     filename_hash = hashlib.md5(link.encode()).hexdigest()
@@ -39,7 +46,6 @@ def get_cache_path_for_link(link):
     filename_hash = hashlib.md5(link.encode()).hexdigest()
     return os.path.join(SCRAPED_DIR, f"{filename_hash}.pkl")
 
-# Scraper function
 async def scrape_web_data(links=None, use_markdown=True):
     if not links:
         print("[WARN] No links provided.")
@@ -47,32 +53,35 @@ async def scrape_web_data(links=None, use_markdown=True):
 
     scraped_text = ""
 
-    async with AsyncWebCrawler() as crawler:
-        for link in links:
-            cache_path = get_cache_path_for_link(link)
+    for link in links:
+        cache_path = get_cache_path_for_link(link)
 
-            if os.path.exists(cache_path):
-                with open(cache_path, "rb") as f:
-                    cached_content = pickle.load(f)
-                    scraped_text += cached_content
-                    print(f"✅ Cache hit: Skipping scrape for {link}")
-                    continue
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as f:
+                cached_content = pickle.load(f)
+                scraped_text += cached_content
+                print(f"✅ Cache hit: Skipping scrape for {link}")
+                continue
 
+        retries = 3
+        for attempt in range(retries):
             try:
                 print(f"[INFO] Crawling: {link}")
-                result = await crawler.arun(url=link)
+                async with AsyncWebCrawler() as crawler:
+                    result = await crawler.arun(url=link)
+
                 structured_content = result.markdown if use_markdown else result.html
                 structured_content = structured_content or "No content extracted."
 
                 save_structured_content_to_file(link, structured_content)
 
-                # 🔍 Prompt 1: Table breakdown
+                # Table Breakdown Prompt
                 table_prompt = (
                     "You are analyzing a web page with interest rate tables. "
                     "For EACH table in the content below, write a full breakdown. For each table:\n"
                     "- Mention the heading/title\n"
                     "- Explain each column (tenure, rate, payout frequency, etc.)\n"
-                    "- Mention the rate of interest for each payout options"
+                    "- Mention the rate of interest for each payout options\n"
                     "- Describe values (e.g. '6.75% interest for 18 months FD with monthly payout')\n"
                     "- Call out special cases like highest rate, eligibility criteria, etc.\n"
                     "- DO NOT compare tables; treat them as separate blocks.\n\n"
@@ -82,9 +91,7 @@ async def scrape_web_data(links=None, use_markdown=True):
                 table_response = model.generate_content(table_prompt)
                 table_details = table_response.text if table_response else "❌ Table breakdown failed."
 
-                print(f"\n🧠 Gemini Table Breakdown for {link}:\n{'-'*60}\n{table_details}\n{'-'*60}")
-
-                # 🔍 Prompt 2: FAQs
+                # FAQ Extraction Prompt
                 faq_prompt = (
                     "From the content below, extract up to 15 Frequently Asked Questions (FAQs). "
                     "Include both questions found in the content and logical questions a user might ask. Format:\n"
@@ -94,9 +101,7 @@ async def scrape_web_data(links=None, use_markdown=True):
                 faq_response = model.generate_content(faq_prompt)
                 faq_text = faq_response.text if faq_response else "❌ FAQ extraction failed."
 
-                print(f"\n❓ Gemini FAQs for {link}:\n{'-'*60}\n{faq_text}\n{'-'*60}")
-
-                # Combine results
+                # Combine output
                 link_output = (
                     f"\n\n--- Scraped Content from: {link} ---\n"
                     f"\n📑 Raw Content Preview (first 2000 chars):\n{structured_content[:2000]}...\n"
@@ -105,25 +110,27 @@ async def scrape_web_data(links=None, use_markdown=True):
                     f"\n--- END OF PAGE ---\n"
                 )
 
-                # Save to per-link cache
                 with open(cache_path, "wb") as f:
                     pickle.dump(link_output, f)
                     print(f"💾 Cached scraped content for {link}")
 
                 scraped_text += link_output
+                break  # success: exit retry loop
 
             except Exception as e:
-                print(f"[ERROR] Failed to process {link}: {e}")
+                print(f"[ERROR] Failed to process {link} on attempt {attempt + 1}/{retries}: {e}")
+                if attempt < retries - 1:
+                    print(f"[INFO] Retrying scrape for {link}...")
+                else:
+                    print(f"[ERROR] Failed to process {link} after {retries} attempts.")
 
     return scraped_text
 
-# Runner
+# Optional test runner
 async def main():
-    # 🔗 Add your list of links here for testing
-    final_data = await scrape_web_data()
-    print("\n✅ Final Combined Output (first 2000 chars):\n")
-    print(final_data[:3000])
-    print("\n ✅ <----------------------------------------------------Final output preview ends here------------------------------------------------------------------>✅ ")
+   
+    final_output = await scrape_web_data()
+    print(final_output[:3000])  # Preview
 
 if __name__ == "__main__":
     asyncio.run(main())
