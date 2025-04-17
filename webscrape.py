@@ -6,8 +6,10 @@ import pickle
 from playwright.async_api import async_playwright
 import google.generativeai as genai
 
+# Configure Gemini
 genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
 
+# Create the model
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash-8b",
     generation_config={
@@ -19,9 +21,10 @@ model = genai.GenerativeModel(
     },
 )
 
+# Ensure directory exists
 os.makedirs("raw_structured_dumps", exist_ok=True)
 
-
+# Prompt creators
 def create_table_prompt(content):
     return (
         "You are analyzing a web page with one or more interest rate tables related to Fixed Deposits (FDs). "
@@ -36,7 +39,6 @@ def create_table_prompt(content):
         "Here is the content:\n\n" + content
     )
 
-
 def create_faq_prompt(content):
     return (
         "From the content below, extract up to 20 Frequently Asked Questions (FAQs). "
@@ -45,7 +47,6 @@ def create_faq_prompt(content):
         "Content:\n\n" + content
     )
 
-
 def save_raw_content(link, content):
     hash_key = hashlib.md5(link.encode()).hexdigest()
     path = os.path.join("raw_structured_dumps", f"structured_{hash_key}.txt")
@@ -53,7 +54,7 @@ def save_raw_content(link, content):
         f.write(content)
     print(f"📄 Saved structured content to {path}")
 
-
+# Extract table + body text
 async def extract_structured_content(page):
     tables = await page.query_selector_all("table")
     content = ""
@@ -78,7 +79,7 @@ async def extract_structured_content(page):
     content += "\nFULL PAGE TEXT:\n" + body_text
     return content
 
-
+# Cache-aware fetch
 async def fetch_or_cache_data(link):
     hash_key = hashlib.md5(link.encode()).hexdigest()
     cache_file = f"scraped_{hash_key}.pkl"
@@ -98,12 +99,12 @@ async def fetch_or_cache_data(link):
         browser = await p.chromium.launch(
             headless=True,
             args=[
-                "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
-                "--disable-infobars",
+                "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
-                "--disable-extensions",
-                "--start-maximized",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-gpu",
+                "--start-maximized"
             ]
         )
 
@@ -116,19 +117,22 @@ async def fetch_or_cache_data(link):
         page = await context.new_page()
 
         try:
-            await page.goto(link, timeout=10000)
+            await page.goto(link, timeout=20000)
             await page.wait_for_load_state("networkidle")
-
-            # Mimic user scroll
             await page.mouse.wheel(0, 200)
             await page.wait_for_timeout(1000)
 
-            # Optional: Screenshot + HTML for debugging
+            # Optional debug output
             await page.screenshot(path=f"debug_{hash_key}.png", full_page=True)
             with open(f"debug_{hash_key}.html", "w", encoding="utf-8") as f:
                 f.write(await page.content())
 
             structured_content = await extract_structured_content(page)
+
+        except Exception as e:
+            print(f"❌ Failed to navigate {link}: {e}")
+            structured_content = f"Error while fetching {link}: {e}"
+
         finally:
             await browser.close()
 
@@ -140,10 +144,9 @@ async def fetch_or_cache_data(link):
     save_raw_content(link, structured_content)
     return structured_content
 
-
+# Main function to call
 async def scrape_web_data(links):
     print(f"\n🌐 Starting web scraping for {len(links)} link(s)...")
-
     final_outputs = []
 
     for link in links:
