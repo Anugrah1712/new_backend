@@ -3,11 +3,10 @@
 from playwright.sync_api import sync_playwright
 from langchain_core.prompts import ChatPromptTemplate
 import os 
-from dotenv import load_dotenv
+from datetime import datetime
 
-# Load environment variables from .env file
-load_dotenv()
-
+def get_current_datetime():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def inference_chroma(chat_model, question, retriever, chat_history):
     from langchain_together import ChatTogether
@@ -22,7 +21,8 @@ def inference_chroma(chat_model, question, retriever, chat_history):
     history_context = "\n".join(
         [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
     )
-    question_with_history = f"Chat History:\n{history_context}\n\nNew Question:\n{question}"
+
+    question_with_history = f"Current DateTime: {get_current_datetime()}\n\nChat History:\n{history_context}\n\nNew Question:\n{question}"
 
     prompt_template = PromptTemplate(
         input_variables=["context", "question"],
@@ -85,8 +85,9 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         )
         
         prompt_template = PromptTemplate(
-            input_variables=["history", "context", "question"],
-            template="""You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
+            input_variables=["history", "context", "question", "datetime"],
+            template="""[Current Date and Time: {datetime}]
+            You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
 
             Context: {context}
 
@@ -120,6 +121,11 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             11. If multiple ranges match, return the rate from the most relevant range.
             12. Maintain clarity and conciseness, providing complete but direct answers.
             13. Keep answers concise, accurate and to the point without unnecessary explanations.
+            14. You must be contextually aware of the current time of day using the provided timestamp.
+                    - Greet the user based on the actual current time.
+                    - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+                    - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+                    - If the user asks for the time, provide the current time based on the timestamp.
 
             **Response:**"""
         )
@@ -131,10 +137,12 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         )
         
         print("Generating response...")  # Debug point 15
+        current_datetime = get_current_datetime()
         answer = qa_chain.run(
             history=history_context,
             context=context,
-            question=question
+            question=question,
+            datetime=current_datetime
         )
         print("Faiss response")
         return answer
@@ -165,7 +173,10 @@ def inference_pinecone(chat_model, question,embedding_model_global, pinecone_ind
       [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
   )
 
-  prompt = f"""You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
+  current_datetime = get_current_datetime()
+
+  prompt = f"""[Current Date and Time: {current_datetime}]
+  You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
 
             Context: {context}
 
@@ -198,7 +209,11 @@ def inference_pinecone(chat_model, question,embedding_model_global, pinecone_ind
             2. Example: If the tenure is *37 months, and the provided range is **36-60 months, return the interest rate for **36-60 months*.
             3. If multiple ranges match, return the rate from the most relevant range.
             6. Maintain clarity and conciseness, avoiding unnecessary details.
-
+            7. You must be contextually aware of the current time of day using the provided timestamp.
+                - Greet the user based on the actual current time.
+                - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+                - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+                - If the user asks for the time, provide the current time based on the timestamp.
             *Response:*"""
 
   llm = ChatTogether(api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
@@ -224,7 +239,7 @@ def inference_weaviate(chat_model, question , vs , chat_history):
     history_context = "\n".join(
         [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
     )
-    question_with_history = f"Chat History:\n{history_context}\n\nNew Question:\n{question}"
+    question_with_history = f"Current DateTime: {get_current_datetime()}\n\nChat History:\n{history_context}\n\nNew Question:\n{question}"
 
     # Retrieve documents from Weaviate
     retriever = vs.as_retriever()
@@ -236,8 +251,12 @@ def inference_weaviate(chat_model, question , vs , chat_history):
 
     # Define prompt template
     template = """
-    You are an expert financial advisor. Use the context and the appended chat history in the question to answer accurately and concisely.
-
+    1. You are an expert financial advisor. Use the context and the appended chat history in the question to answer accurately and concisely.
+    2. You must be contextually aware of the current time of day using the provided timestamp.
+                - Greet the user based on the actual current time.
+                - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+                - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+                - If the user asks for the time, provide the current time based on the timestamp.
     Context:
     {context}
 
@@ -263,7 +282,7 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
     history_context = "\n".join(
         [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
     )
-    question_with_history = f"Chat History:\n{history_context}\n\nNew Question:\n{question}"
+    question_with_history = f"Current DateTime: {get_current_datetime()}\n\nChat History:\n{history_context}\n\nNew Question:\n{question}"
 
     query_embedding = embedding_model_global.embed_query(question_with_history)
     query_embedding = np.array(query_embedding)
@@ -277,8 +296,13 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
     contexts = [result.payload['page_content'] for result in search_results]
     context = "\n".join(contexts)
 
-    prompt = f"""
-    You are a helpful assistant. Use the following retrieved documents to answer the question:
+    prompt = f"""[Current Date and Time: {get_current_datetime()}]
+    1. You are a helpful assistant. Use the following retrieved documents to answer the question:
+    2. You must be contextually aware of the current time of day using the provided timestamp.
+                - Greet the user based on the actual current time.
+                - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+                - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+                - If the user asks for the time, provide the current time based on the timestamp.
 
     Context:
     {context}
