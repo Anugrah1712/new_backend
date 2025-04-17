@@ -1,5 +1,3 @@
-# webscrape.py
-
 import asyncio
 import hashlib
 import os
@@ -8,7 +6,7 @@ import pickle
 from playwright.async_api import async_playwright
 import google.generativeai as genai
 
-genai.configure(api_key=("AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY"))
+genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
 
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash-8b",
@@ -38,6 +36,7 @@ def create_table_prompt(content):
         "Here is the content:\n\n" + content
     )
 
+
 def create_faq_prompt(content):
     return (
         "From the content below, extract up to 20 Frequently Asked Questions (FAQs). "
@@ -46,12 +45,14 @@ def create_faq_prompt(content):
         "Content:\n\n" + content
     )
 
+
 def save_raw_content(link, content):
     hash_key = hashlib.md5(link.encode()).hexdigest()
     path = os.path.join("raw_structured_dumps", f"structured_{hash_key}.txt")
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"📄 Saved structured content to {path}")
+
 
 async def extract_structured_content(page):
     tables = await page.query_selector_all("table")
@@ -77,6 +78,7 @@ async def extract_structured_content(page):
     content += "\nFULL PAGE TEXT:\n" + body_text
     return content
 
+
 async def fetch_or_cache_data(link):
     hash_key = hashlib.md5(link.encode()).hexdigest()
     cache_file = f"scraped_{hash_key}.pkl"
@@ -93,13 +95,42 @@ async def fetch_or_cache_data(link):
     print(f"🌐 Scraping fresh data for: {link}")
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(link)
-        await page.wait_for_timeout(3000)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-infobars",
+                "--disable-dev-shm-usage",
+                "--disable-extensions",
+                "--start-maximized",
+            ]
+        )
 
-        structured_content = await extract_structured_content(page)
-        await browser.close()
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            locale="en-US",
+            viewport={"width": 1280, "height": 800}
+        )
+
+        page = await context.new_page()
+
+        try:
+            await page.goto(link, timeout=10000)
+            await page.wait_for_load_state("networkidle")
+
+            # Mimic user scroll
+            await page.mouse.wheel(0, 200)
+            await page.wait_for_timeout(1000)
+
+            # Optional: Screenshot + HTML for debugging
+            await page.screenshot(path=f"debug_{hash_key}.png", full_page=True)
+            with open(f"debug_{hash_key}.html", "w", encoding="utf-8") as f:
+                f.write(await page.content())
+
+            structured_content = await extract_structured_content(page)
+        finally:
+            await browser.close()
 
     with open(cache_file, "wb") as f:
         pickle.dump(structured_content, f)
@@ -108,6 +139,7 @@ async def fetch_or_cache_data(link):
 
     save_raw_content(link, structured_content)
     return structured_content
+
 
 async def scrape_web_data(links):
     print(f"\n🌐 Starting web scraping for {len(links)} link(s)...")
