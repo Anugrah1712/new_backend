@@ -64,12 +64,12 @@ async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data):
     for i, p in enumerate(paragraphs[:5]):
         print(f"{i+1}. {p[:100]}...")
     
-    print("✅ <----------------------------------------------Scraped Data from Webscraping starts here--------------------------->✅ ")
-    print(scraped_data)
-    print("✅ <----------------------------------------------Scraped Data from Webscraping ends here----------------------------->✅ ")
-    print("\n✅ Final Scraped Data Output (truncated):\n", scraped_data[:2000])
+    # print("✅ <----------------------------------------------Scraped Data from Webscraping starts here--------------------------->✅ ")
+    # print(scraped_data)
+    # print("✅ <----------------------------------------------Scraped Data from Webscraping ends here----------------------------->✅ ")
+    # print("\n✅ Final Scraped Data Output (truncated):\n", scraped_data[:2000])
 
-    print("\n✅ Final Scraped Data Output ends here :\n")
+    # print("\n✅ Final Scraped Data Output ends here :\n")
 
 
     if scraped_data:
