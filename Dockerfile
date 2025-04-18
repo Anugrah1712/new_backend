@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies
+# Install system dependencies and Tor
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     libappindicator3-1 \
     xdg-utils \
     ca-certificates \
+    tor \
     && apt-get clean
 
 # Set work directory
@@ -37,14 +38,11 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers
+# Install Playwright and its dependencies
 RUN pip install playwright && playwright install --with-deps
 
-# Copy the rest of your code
+# Copy the rest of your app
 COPY . .
 
-# Expose the port if you're running an API
-EXPOSE 8000
-
-# Default command
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start Tor in the background before launching your app
+CMD service tor start && uvicorn main:app --host 0.0.0.0 --port 8000
