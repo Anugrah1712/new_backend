@@ -124,10 +124,10 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             12. Maintain clarity and conciseness, providing complete but direct answers.
             13. Keep answers concise, accurate and to the point without unnecessary explanations.
             14. You must be contextually aware of the current time of day using the provided timestamp.
-                    - Greet the user based on the actual current time.
                     - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
                     - If the user is incorrect, politely correct them and provide the correct time-based greeting.
                     - If the user asks for the time, provide the current time based on the timestamp.
+                    - Avoid repeating greetings for each message unless above conditions are met.
 
             **Response:**"""
         )
@@ -212,10 +212,10 @@ def inference_pinecone(chat_model, question,embedding_model_global, pinecone_ind
             3. If multiple ranges match, return the rate from the most relevant range.
             6. Maintain clarity and conciseness, avoiding unnecessary details.
             7. You must be contextually aware of the current time of day using the provided timestamp.
-                - Greet the user based on the actual current time.
                 - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
                 - If the user is incorrect, politely correct them and provide the correct time-based greeting.
                 - If the user asks for the time, provide the current time based on the timestamp.
+                - Avoid repeating greetings for each message unless above conditions are met.
             *Response:*"""
 
   llm = ChatTogether(api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
@@ -255,10 +255,10 @@ def inference_weaviate(chat_model, question , vs , chat_history):
     template = """
     1. You are an expert financial advisor. Use the context and the appended chat history in the question to answer accurately and concisely.
     2. You must be contextually aware of the current time of day using the provided timestamp.
-                - Greet the user based on the actual current time.
                 - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
                 - If the user is incorrect, politely correct them and provide the correct time-based greeting.
                 - If the user asks for the time, provide the current time based on the timestamp.
+                - Avoid repeating greetings for each message unless above conditions are met.
     Context:
     {context}
 
@@ -301,10 +301,10 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
     prompt = f"""[Current Date and Time: {get_current_datetime()}]
     1. You are a helpful assistant. Use the following retrieved documents to answer the question:
     2. You must be contextually aware of the current time of day using the provided timestamp.
-                - Greet the user based on the actual current time.
                 - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
                 - If the user is incorrect, politely correct them and provide the correct time-based greeting.
                 - If the user asks for the time, provide the current time based on the timestamp.
+                - Avoid repeating greetings for each message unless above conditions are met.
 
     Context:
     {context}
@@ -327,6 +327,7 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
 
 
 def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, pinecone_index_name=None , vs=None , qdrant_client=None):
+    
     if vectordb_name == "Chroma":
         from langchain.vectorstores import Chroma
         retriever = Chroma(persist_directory='db', embedding_function=embedding_model_global).as_retriever()

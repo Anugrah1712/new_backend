@@ -1,136 +1,106 @@
+from playwright.async_api import async_playwright
 import os
-import asyncio
-import pickle
-import hashlib
-from dotenv import load_dotenv
 import google.generativeai as genai
-from crawl4ai import AsyncWebCrawler
 
-# Monkey-patch Playwright args for crawl4ai
-original_init = AsyncWebCrawler.__init__
 
-def patched_init(self, *args, **kwargs):
-    if "playwright_browser_args" not in kwargs:
-        kwargs["playwright_browser_args"] = ["--no-sandbox", "--disable-setuid-sandbox"]
-    original_init(self, *args, **kwargs)
+genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
 
-AsyncWebCrawler.__init__ = patched_init
-
-# Load environment variables
-load_dotenv()
-genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")  # replace with your actual key
+generation_config = {
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
 
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash-8b",
-    generation_config={
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "top_k": 40,
-        "max_output_tokens": 8192,
-        "response_mime_type": "text/plain",
-    },
+    generation_config=generation_config,
 )
 
-SCRAPED_DIR = "scraped_links"
-os.makedirs(SCRAPED_DIR, exist_ok=True)
+def create_table_prompt(content):
+    return (
+        "You are analyzing a web page with one or more interest rate tables related to Fixed Deposits (FDs). "
+        "For EACH table in the content below:\n"
+        "- Mention the table's heading/title or any label that identifies the table.\n"
+        "- Interpret all rows and columns precisely.\n"
+        "- Clearly explain what each column means.\n"
+        "- Summarize each row’s interest rate for all payout options.\n"
+        "- Highlight the highest available rate and the corresponding tenure/payout.\n"
+        "- Do NOT compare across tables. Each table should be explained independently.\n"
+        "- Include any eligibility criteria near the tables if applicable.\n\n"
+        "Here is the content:\n\n" + content
+    )
 
-def save_structured_content_to_file(link, content):
-    os.makedirs("raw_structured_dumps", exist_ok=True)
-    filename_hash = hashlib.md5(link.encode()).hexdigest()
-    file_path = os.path.join("raw_structured_dumps", f"structured_{filename_hash}.txt")
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"📄 Saved raw structured content to {file_path}")
+def create_faq_prompt(content):
+    return (
+        "From the content below, extract up to 20 Frequently Asked Questions (FAQs). "
+        "Include both questions found in the content and logical questions a user might ask. Format:\n"
+        "Q: <question>\nA: <answer>\n\n"
+        "Content:\n\n" + content
+    )
 
-def get_cache_path_for_link(link):
-    filename_hash = hashlib.md5(link.encode()).hexdigest()
-    return os.path.join(SCRAPED_DIR, f"{filename_hash}.pkl")
+async def scrape_web_data(links):
+    scraped_data = []
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False, args=["--no-sandbox", "--disable-setuid-sandbox"])
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Safari/537.36",
+            locale="en-US"
+        )
 
-async def scrape_web_data(links=None, use_markdown=True):
-    if not links:
-        print("[WARN] No links provided.")
-        return ""
-
-    scraped_text = ""
-
-    for link in links:
-        cache_path = get_cache_path_for_link(link)
-
-        if os.path.exists(cache_path):
-            with open(cache_path, "rb") as f:
-                cached_content = pickle.load(f)
-                scraped_text += cached_content
-                print(f"✅ Cache hit: Skipping scrape for {link}")
-                continue
-
-        retries = 3
-        for attempt in range(retries):
+        for url in links:
             try:
-                print(f"[INFO] Crawling: {link}")
-                async with AsyncWebCrawler() as crawler:
-                    result = await crawler.arun(url=link)
+                print(f"\n🌐 Scraping URL: {url}")
+                page = await context.new_page()
+                await page.goto(url, timeout=60000)
+                await page.wait_for_timeout(3000)
 
-                structured_content = result.markdown if use_markdown else result.html
-                structured_content = structured_content or "No content extracted."
+                full_text = await page.inner_text("body")
+                print(f"✅ Extracted full page text (truncated):\n{full_text[:1000]}...\n")
 
-                save_structured_content_to_file(link, structured_content)
+                structured_tables = []
+                tables = await page.query_selector_all("table")
+                print(f"📊 Found {len(tables)} tables on the page.")
 
-                # Table Breakdown Prompt
-                table_prompt = (
-                    "You are analyzing a web page with interest rate tables. "
-                    "For EACH table in the content below, write a full breakdown. For each table:\n"
-                    "- Mention the heading/title\n"
-                    "- Explain each column (tenure, rate, payout frequency, etc.)\n"
-                    "- Mention the rate of interest for each payout options\n"
-                    "- Describe values (e.g. '6.75% interest for 18 months FD with monthly payout')\n"
-                    "- Call out special cases like highest rate, eligibility criteria, etc.\n"
-                    "- DO NOT compare tables; treat them as separate blocks.\n\n"
-                    "Below is the page content:\n\n"
-                    + structured_content
-                )
+                for i, table in enumerate(tables, start=1):
+                    rows = await table.query_selector_all("tr")
+                    table_data = []
+                    for row in rows:
+                        columns = await row.query_selector_all("th, td")
+                        column_text = [await column.inner_text() for column in columns if column]
+                        if column_text:
+                            table_data.append([cell.strip() for cell in column_text])
+                    if table_data:
+                        structured_table = f"\nTable {i}:\n" + "\n".join([", ".join(row) for row in table_data])
+                        print(f"📋 Extracted Table {i}:\n{structured_table}\n")
+                        structured_tables.append(structured_table)
+
+                structured_table_text = "\n\n".join(structured_tables)
+                combined_content = full_text + "\n\n" + structured_table_text
+
+                table_prompt = create_table_prompt(combined_content)
+                faq_prompt = create_faq_prompt(combined_content)
+
+                print("🤖 Sending table prompt to Gemini...")
                 table_response = model.generate_content(table_prompt)
-                table_details = table_response.text if table_response else "❌ Table breakdown failed."
+                print(f"✅ Gemini Table Response:\n{table_response.text[:1000]}...\n")
 
-                # FAQ Extraction Prompt
-                faq_prompt = (
-                    "From the content below, extract up to 15 Frequently Asked Questions (FAQs). "
-                    "Include both questions found in the content and logical questions a user might ask. Format:\n"
-                    "Q: <question>\nA: <answer>\n\n"
-                    "Content:\n\n" + structured_content
-                )
+                print("🤖 Sending FAQ prompt to Gemini...")
                 faq_response = model.generate_content(faq_prompt)
-                faq_text = faq_response.text if faq_response else "❌ FAQ extraction failed."
+                print(f"✅ Gemini FAQ Response:\n{faq_response.text[:1000]}...\n")
 
-                # Combine output
-                link_output = (
-                    f"\n\n--- Scraped Content from: {link} ---\n"
-                    f"\n📑 Raw Content Preview (first 2000 chars):\n{structured_content[:2000]}...\n"
-                    f"\n📘 Detailed Table Breakdown:\n{table_details}\n"
-                    f"\n❓ FAQs:\n{faq_text}\n"
-                    f"\n--- END OF PAGE ---\n"
-                )
-
-                with open(cache_path, "wb") as f:
-                    pickle.dump(link_output, f)
-                    print(f"💾 Cached scraped content for {link}")
-
-                scraped_text += link_output
-                break  # success: exit retry loop
+                scraped_data.append({
+                    "url": url,
+                    "table_analysis": table_response.text,
+                    "faq_extraction": faq_response.text,
+                    "raw_text": full_text,
+                    "tables_raw": structured_table_text
+                })
 
             except Exception as e:
-                print(f"[ERROR] Failed to process {link} on attempt {attempt + 1}/{retries}: {e}")
-                if attempt < retries - 1:
-                    print(f"[INFO] Retrying scrape for {link}...")
-                else:
-                    print(f"[ERROR] Failed to process {link} after {retries} attempts.")
+                print(f"❌ Error scraping {url}: {e}")
+                scraped_data.append({"url": url, "error": str(e)})
 
-    return scraped_text
-
-# Optional test runner
-async def main():
-   
-    final_output = await scrape_web_data()
-    print(final_output[:3000])  # Preview
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        await browser.close()
+    return scraped_data

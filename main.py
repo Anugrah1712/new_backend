@@ -72,6 +72,7 @@ if os.path.exists(PICKLE_FILE_PATH):
         session_state["weaviate_client"] = weaviate.connect_to_weaviate_cloud(
             cluster_url=weaviate_url,
             auth_credentials=weaviate.AuthApiKey(weaviate_api_key),
+            skip_init_checks=True
         )
 
     # ✅ Initialize Qdrant Client if Needed
@@ -133,7 +134,16 @@ async def preprocess(
         if links_list:
             try:
                 print("🌐 Scraping web data...")
-                scraped_data = await scrape_web_data(links_list)
+                scraped_data_raw = await scrape_web_data(links_list)
+                scraped_data = [
+                    "\n\n".join([
+                        item.get("page_text", ""),
+                        item.get("tables_raw", ""),
+                        item.get("table_analysis", ""),
+                        item.get("faq_extraction", "")
+                    ])
+                    for item in scraped_data_raw
+                ]
                 print("✅ Web scraping completed!\n")
                 print(scraped_data[:1000])
             except Exception as e:
