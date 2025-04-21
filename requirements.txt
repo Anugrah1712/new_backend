@@ -23,3 +23,5 @@ pinecone
 google-generativeai
 python-multipart
 crawl4ai>=0.1.26
+scrapy 
+scrapy-splash

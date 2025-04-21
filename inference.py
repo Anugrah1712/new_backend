@@ -1,10 +1,62 @@
 #Inference.py 
-
+import os
+import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 from langchain_core.prompts import ChatPromptTemplate
 import os 
 import pytz
 from datetime import datetime
+
+# --- Custom Model Routing ---
+genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
+
+def build_rag_prompt(context, history, question, current_datetime):
+    prompt = f"""[Current Date and Time: {current_datetime}]
+    You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
+
+    Context: {context}
+
+    Chat History: {history}
+
+    Question: {question}
+
+    Answer to general conversation texts like hello, bye, etc.
+
+    *Strict Instructions to Avoid Hallucination:*
+    0. Do not mention the current date or time unless:
+        - The user explicitly asks for the time/date.
+        -  Current Time (for reasoning greeting correction only): {current_datetime}
+        - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+        - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+        - If the user asks for the time, provide the current time based on the timestamp.
+        - Avoid repeating greetings for each message unless above conditions are met.
+    1. Only answer using the provided context.
+    2. Do not assume or generate information beyond what is explicitly mentioned in the context.
+    3. Always quote numerical values, interest rates, and tenure periods exactly as found in the context.
+    4. If multiple interest rates exist, specify whether they apply to general citizens or senior citizens.
+    5. For yield-related questions, provide both the FD rate and yield percentage.
+    6. If the question requires a numerical calculation (e.g., FD maturity, tax deduction), perform the necessary calculation.
+    7. Use the compound interest formula where required: [A = P * (1 + r/n)^(nt)]
+        -where:  
+        - P = Principal amount  
+        - r = Interest rate (in decimal)  
+        - n = Compounding frequency per year (1 for annual, 12 for monthly)  
+        - t = Time in years  
+    8. For tax-related queries, apply TDS deduction rules:
+        - If FD interest exceeds ₹40,000 (₹50,000 for seniors), deduct 10% TDS.
+        - If PAN is missing, apply 20% TDS.
+    9. When discussing senior citizen rates:
+        - Senior citizens are individuals aged 60 years and above
+        - General citizens are individuals below 60 years of age
+    10. If the question asks for an interest rate for a specific tenure (e.g., 37 months), but the provided information only contains range-based tenures, find the correct range and use the corresponding interest rate.
+        Example: If the tenure is 37 months, and the provided range is 36–60 months, return the interest rate for 36–60 months.
+    11. If multiple ranges match, return the rate from the most relevant range.
+    12. Maintain clarity and conciseness, avoiding unnecessary details.
+    13. Be contextually aware of the current time of day using the timestamp.
+
+     Current Time (for reasoning greeting correction only): {current_datetime}
+    *Response:* """
+    return prompt
 
 def get_current_datetime():
     ist = pytz.timezone("Asia/Kolkata") 
@@ -14,50 +66,87 @@ def inference_chroma(chat_model, question, retriever, chat_history):
     from langchain_together import ChatTogether
     from langchain.prompts import PromptTemplate
     from langchain.chains import RetrievalQA
+    import openai, google.generativeai as genai
 
-    chat_model = ChatTogether(
-        together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
-        model=chat_model,
-    )
+    # Extract relevant context from retriever
+    docs = retriever.get_relevant_documents(question)
+    context = "\n\n".join([doc.page_content for doc in docs]) if docs else ""
 
-    history_context = "\n".join(
-        [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
-    )
+    current_datetime = get_current_datetime()
 
-    question_with_history = f"Current DateTime: {get_current_datetime()}\n\nChat History:\n{history_context}\n\nNew Question:\n{question}"
+    # === Gemini ===
+    if "gemini" in chat_model.lower():
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        history = [{"role": msg["role"], "parts": [msg["content"]]} for msg in chat_history]
+        prompt = build_rag_prompt(context, history, question, current_datetime)
+        response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+        print("Gemini Response ->")
+        return response.text
 
-    prompt_template = PromptTemplate(
-        input_variables=["context", "question"],
-        template=(
-            "You are an expert financial advisor. Use the context and the appended chat history in the question to answer accurately and concisely.\n\n"
-            "Context: {context}\n\n"
-            "{question}\n\n"
-            "Answer (be specific and avoid hallucinations):"
-        ),
-    )
+    # === GPT ===
+    elif "gpt" in chat_model.lower():
+        messages = [{"role": m["role"], "content": m["content"]} for m in chat_history]
+        if context:
+            messages.insert(0, {"role": "system", "content": f"Context:\n{context}"})
+        messages.append({"role": "user", "content": question})
 
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=chat_model,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-        chain_type_kwargs={"prompt": prompt_template},
-    )
+        response = openai.ChatCompletion.create(
+            model=chat_model,
+            messages=messages,
+            temperature=0.4,
+        )
+        return response["choices"][0]["message"]["content"]
 
-    llm_response = qa_chain(question_with_history)
-    print("Chroma Response")
-    print(llm_response['result'])
-    return llm_response['result']
+    # === Together Model ===
+    else:
+        chat_model = ChatTogether(
+            together_api_key=("tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4"),
+            model=chat_model,
+        )
+
+        history_context = "\n".join(
+            [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
+        )
+
+        question_with_history = f"Current DateTime: {get_current_datetime()}\n\nChat History:\n{history_context}\n\nNew Question:\n{question}"
+
+        prompt_template = PromptTemplate(
+            input_variables=["context", "question"],
+            template=(
+                "You are an expert financial advisor. Use the context and the appended chat history in the question to answer accurately and concisely.\n\n"
+                "Context: {context}\n\n"
+                "{question}\n\n"
+                "Answer (be specific and avoid hallucinations):"
+            ),
+        )
+
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=chat_model,
+            chain_type="stuff",
+            retriever=retriever,
+            return_source_documents=True,
+            chain_type_kwargs={"prompt": prompt_template},
+        )
+
+        llm_response = qa_chain(question_with_history)
+        print("Chroma Response")
+        print(llm_response['result'])
+        return llm_response['result']
 
 def inference_faiss(chat_model, question, embedding_model_global, index, docstore, chat_history):
     from langchain.chains import LLMChain
     from langchain_together import ChatTogether
     from langchain.prompts import PromptTemplate
     import numpy as np
+    import openai, os
+    import google.generativeai as genai
+
     print("Starting inference...")  # Debug point 11
+
+    current_datetime = get_current_datetime()
+
     
     try:
-        # Test retrieval
         query_embedding = embedding_model_global.embed_query(question)
         print("Created query embedding")  # Debug point 12
         
@@ -65,7 +154,6 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         D, I = index.search(np.array([query_embedding]), k=k)
         print(f"Retrieved {len(I[0])} documents")  # Debug point 13
         
-        # Collect contexts
         contexts = []
         for i, idx in enumerate(I[0]):
             if idx != -1:
@@ -76,15 +164,35 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         
         if not contexts:
             return "No relevant context found in the documents."
-            
-        # Combine contexts
-        context = "\n\n---\n\n".join(contexts)
         
-        # Create chat completion
-        chat_model = ChatTogether(
-            together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
-            model=chat_model,
-        )
+        context = "\n\n---\n\n".join(contexts)
+
+        if "gemini" in chat_model.lower():
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            history = [{"role": msg["role"], "parts": [msg["content"]]} for msg in chat_history]
+            prompt = build_rag_prompt(context, history, question, current_datetime)
+            response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+            print("Gemini Response ->")
+            return response.text
+
+        elif "gpt" in chat_model.lower():
+            messages = [{"role": m["role"], "content": m["content"]} for m in chat_history]
+            if context:
+                messages.insert(0, {"role": "system", "content": f"Context:\n{context}"})
+            messages.append({"role": "user", "content": question})
+
+            response = openai.ChatCompletion.create(
+                model=chat_model,
+                messages=messages,
+                temperature=0.4,
+            )
+            return response["choices"][0]["message"]["content"]
+
+        else:
+            chat_model = ChatTogether(
+                together_api_key=("tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4"),
+                model=chat_model,
+            )
         
         prompt_template = PromptTemplate(
             input_variables=["history", "context", "question", "datetime"],
@@ -97,7 +205,6 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
 
             Question: {question}
 
-            Answer to general conversation texts like hello,bye,etc
             **Strict Instructions to Avoid Hallucination:**
             1. Only answer using the provided context.
             2. Do not assume or generate information beyond what is explicitly mentioned in the context.
@@ -106,8 +213,8 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             5. For yield-related questions, provide both the FD rate and yield percentage.
             6. If the question requires a numerical calculation (e.g., FD maturity, tax deduction), perform the necessary calculation.
             7. Use the compound interest formula where required:
-               [A = P * r * t]
-               where:  
+               [A = P * (1 + r/n)^(nt)]
+                where:  
                - P = Principal amount  
                - r = Interest rate (in decimal)  
                - n = Compounding frequency per year (1 for annual, 12 for monthly)  
@@ -124,10 +231,11 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             12. Maintain clarity and conciseness, providing complete but direct answers.
             13. Keep answers concise, accurate and to the point without unnecessary explanations.
             14. You must be contextually aware of the current time of day using the provided timestamp.
-                    - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
-                    - If the user is incorrect, politely correct them and provide the correct time-based greeting.
-                    - If the user asks for the time, provide the current time based on the timestamp.
-                    - Avoid repeating greetings for each message unless above conditions are met.
+                - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+                - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+                - If the user asks for the time, provide the current time based on the timestamp.
+                - Avoid repeating greetings for each message unless above conditions are met.
+                [System Timestamp: {current_datetime} — for internal time reasoning only. Do not mention unless explicitly asked.]
 
             **Response:**"""
         )
@@ -148,95 +256,119 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         )
         print("Faiss response")
         return answer
-        
+
     except Exception as e:
-        print(f"Error during inference: {str(e)}")  # Changed from st.error to print
+        print(f"Error during inference: {str(e)}")
         return "An error occurred while processing your question."
 
-def inference_pinecone(chat_model, question,embedding_model_global, pinecone_index,chat_history):
-  import pinecone
-  from pinecone import Pinecone
-  from langchain_together import ChatTogether
-  import numpy as np
+def inference_pinecone(chat_model, question, embedding_model_global, pinecone_index, chat_history):
+    import pinecone
+    from pinecone import Pinecone
+    from langchain_together import ChatTogether
+    import numpy as np
+    import openai
 
-  query_embedding = embedding_model_global.embed_query(question)
-  query_embedding = np.array(query_embedding)
+    query_embedding = embedding_model_global.embed_query(question)
+    query_embedding = np.array(query_embedding)
 
-  search_results =  pinecone_index.query(
-      vector=query_embedding.tolist(),
-      top_k=4,
-      include_metadata=True
-  )
-  contexts = [result['metadata']['text'] for result in search_results['matches']]
+    search_results = pinecone_index.query(
+        vector=query_embedding.tolist(),
+        top_k=4,
+        include_metadata=True
+    )
+    contexts = [result['metadata']['text'] for result in search_results['matches']]
+    context = "\n".join(contexts)
 
-  context = "\n".join(contexts)
+    history = "\n".join(
+        [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
+    )
+    current_datetime = get_current_datetime()
 
-  history = "\n".join(
-      [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
-  )
+    prompt = f"""[Current Date and Time: {current_datetime}]
+You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
 
-  current_datetime = get_current_datetime()
+Context: {context}
 
-  prompt = f"""[Current Date and Time: {current_datetime}]
-  You are a financial advisor specializing in Bajaj Finance Fixed Deposits. Use the following context to answer questions accurately:
+Chat History: {history}
 
-            Context: {context}
+Question: {question}
 
-            Chat History: {history}
+Answer to general conversation texts like hello,bye,etc
 
-            Question: {question}
+*Strict Instructions to Avoid Hallucination:*
+1. Only answer using the provided context.
+2. Do not assume or generate information beyond what is explicitly mentioned in the context.
+3. Always quote numerical values, interest rates, and tenure periods exactly as found in the context.
+4. If multiple interest rates exist, specify whether they apply to general citizens or senior citizens.
+5. For yield-related questions, provide both the FD rate and yield percentage.
+6. If the question requires a numerical calculation (e.g., FD maturity, tax deduction), perform the necessary calculation.
+7. Use the compound interest formula where required: [A = P * (1 + r/n)^(nt)]
 
-            Answer to general conversation texts like hello,bye,etc
-            *Strict Instructions to Avoid Hallucination:*
-            1. Only answer using the provided context.
-            2. Do not assume or generate information beyond what is explicitly mentioned in the context.
-            3. Always quote numerical values, interest rates, and tenure periods exactly as found in the context.
-            4. If multiple interest rates exist, specify whether they apply to general citizens or senior citizens.
-            5. For yield-related questions, provide both the FD rate and yield percentage.
-            6.If the question requires a numerical calculation (e.g., FD maturity, tax deduction), perform the necessary calculation.**
-            7.Use the compound interest formula where required:**  
-            [A = P * r * t
-            ]
-            where:  
-            - P = Principal amount  
-            - r = Interest rate (in decimal)  
-            - n = Compounding frequency per year (1 for annual, 12 for monthly)  
-            - t = Time in years  
-            8. For tax-related queries**, apply TDS deduction rules:
-            - If FD interest *exceeds ₹40,000 (₹50,000 for seniors), deduct **10% TDS*.
-            - If PAN is missing, apply *20% TDS*.
-            4. If multiple interest rates exist*, clearly specify whether they apply to **general citizens* or *senior citizens*.
-            5. For yield-related questions, provide both FD rate and yield percentage.
-            If the question asks for an interest rate for a *specific tenure (e.g., 37 months), but the provided information only contains **range-based tenures*, find the correct range and use the corresponding interest rate.
-            2. Example: If the tenure is *37 months, and the provided range is **36-60 months, return the interest rate for **36-60 months*.
-            3. If multiple ranges match, return the rate from the most relevant range.
-            6. Maintain clarity and conciseness, avoiding unnecessary details.
-            7. You must be contextually aware of the current time of day using the provided timestamp.
-                - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
-                - If the user is incorrect, politely correct them and provide the correct time-based greeting.
-                - If the user asks for the time, provide the current time based on the timestamp.
-                - Avoid repeating greetings for each message unless above conditions are met.
-            *Response:*"""
+   where:  
+   - P = Principal amount  
+   - r = Interest rate (in decimal)  
+   - n = Compounding frequency per year (1 for annual, 12 for monthly)  
+   - t = Time in years  
+8. For tax-related queries, apply TDS deduction rules:
+   - If FD interest exceeds ₹40,000 (₹50,000 for seniors), deduct 10% TDS.
+   - If PAN is missing, apply 20% TDS.
+9. When discussing senior citizen rates:
+   - Senior citizens are individuals aged 60 years and above
+   - General citizens are individuals below 60 years of age
+10. If the question asks for an interest rate for a specific tenure (e.g., 37 months), but the provided information only contains range-based tenures, find the correct range and use the corresponding interest rate.
+    Example: If the tenure is 37 months, and the provided range is 36–60 months, return the interest rate for 36–60 months.
+11. If multiple ranges match, return the rate from the most relevant range.
+12. Maintain clarity and conciseness, avoiding unnecessary details.
+13. Be contextually aware of the current time of day using the timestamp:
+    - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+    - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+    - If the user asks for the time, provide the current time based on the timestamp.
+    - Avoid repeating greetings for each message unless above conditions are met.
 
-  llm = ChatTogether(api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
-                  model=chat_model,  )
+    [System Timestamp: {current_datetime} — for internal time reasoning only. Do not mention unless explicitly asked.]
 
-  response = llm.predict(prompt)
-  print("Pinecone response")
-  print(response)
-  print(context)
-  return response
+*Response:*"""
+
+    # === Gemini ===
+    if "gemini" in chat_model.lower():
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        prompt = build_rag_prompt(context, history, question, current_datetime)
+        response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+        print("Gemini Response ->")
+        return response.text
+
+    # === GPT ===
+    elif "gpt" in chat_model.lower():
+        messages = [{"role": m["role"], "content": m["content"]} for m in chat_history]
+        if context:
+            messages.insert(0, {"role": "system", "content": f"Context:\n{context}"})
+        messages.append({"role": "user", "content": question})
+
+        response = openai.ChatCompletion.create(
+            model=chat_model,
+            messages=messages,
+            temperature=0.4,
+        )
+        return response["choices"][0]["message"]["content"]
+
+    # === Together ===
+    else:
+        llm = ChatTogether(
+            together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
+            model=chat_model,
+        )
+        response = llm.predict(prompt)
+    
+    print("Pinecone response")
+    print(response)
+    return response
+        
 
 
 def inference_weaviate(chat_model, question , vs , chat_history):
     from langchain_together import ChatTogether
     from langchain.prompts import ChatPromptTemplate
     from langchain.schema.output_parser import StrOutputParser
-
-    chat_model = ChatTogether(
-        together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
-        model=chat_model,
-    )
 
     history_context = "\n".join(
         [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
@@ -259,6 +391,75 @@ def inference_weaviate(chat_model, question , vs , chat_history):
                 - If the user is incorrect, politely correct them and provide the correct time-based greeting.
                 - If the user asks for the time, provide the current time based on the timestamp.
                 - Avoid repeating greetings for each message unless above conditions are met.
+    [System Timestamp: {current_datetime} — for internal time reasoning only. Do not mention unless explicitly asked.]
+
+    Context:
+    {context}
+
+    {question}
+
+    Answer (be specific and avoid hallucinations):
+    """
+    prompt = ChatPromptTemplate.from_template(template)
+    output_parser = StrOutputParser()
+
+    current_datetime = get_current_datetime()
+
+
+    
+    if "gemini" in chat_model.lower():
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        history = [{"role": msg["role"], "parts": [msg["content"]]} for msg in chat_history]
+        prompt = build_rag_prompt(context, history, question, current_datetime)
+        response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+        print("Gemini Response ->")
+        return response.text
+
+    # === GPT ===
+    elif "gpt" in chat_model.lower():
+        messages = [{"role": m["role"], "content": m["content"]} for m in chat_history]
+        if context:
+            messages.insert(0, {"role": "system", "content": f"Context:\n{context}"})
+        messages.append({"role": "user", "content": question})
+
+        response = openai.ChatCompletion.create(
+            model=chat_model,
+            messages=messages,
+            temperature=0.4,
+        )
+        return response["choices"][0]["message"]["content"]
+
+    # === Together Model ===
+    else:
+        chat_model = ChatTogether(
+            together_api_key=("tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4"),
+            model=chat_model,
+        )
+
+    history_context = "\n".join(
+        [f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history]
+    )
+    question_with_history = f"Current DateTime: {get_current_datetime()}\n\nChat History:\n{history_context}\n\nNew Question:\n{question}"
+
+    # Retrieve documents from Weaviate
+    retriever = vs.as_retriever()
+    retrieved_docs = retriever.get_relevant_documents(question)
+
+    # Extract context from retrieved docs
+    contexts = [doc.page_content for doc in retrieved_docs]
+    context = "\n\n---\n\n".join(contexts)
+
+    # Define prompt template
+    template = """
+    1. You are an expert financial advisor. Use the context and the appended chat history in the question to answer accurately and concisely.
+    2. You must be contextually aware of the current time of day using the provided timestamp.
+                - If the user says "good morning", "good afternoon", etc., validate whether it's appropriate for the time.
+                - If the user is incorrect, politely correct them and provide the correct time-based greeting.
+                - If the user asks for the time, provide the current time based on the timestamp.
+                - Avoid repeating greetings for each message unless above conditions are met.
+
+    [System Timestamp: {current_datetime} — for internal time reasoning only. Do not mention unless explicitly asked.]
+
     Context:
     {context}
 
@@ -306,6 +507,9 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
                 - If the user asks for the time, provide the current time based on the timestamp.
                 - Avoid repeating greetings for each message unless above conditions are met.
 
+    [System Timestamp: {current_datetime} — for internal time reasoning only. Do not mention unless explicitly asked.]
+
+
     Context:
     {context}
 
@@ -314,12 +518,39 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
     Answer:
     """
 
-    llm = ChatTogether(
-        api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
-        model=chat_model
-    )
+    current_datetime = get_current_datetime()
 
-    response = llm.predict(prompt)
+
+    
+    if "gemini" in chat_model.lower():
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        history = [{"role": msg["role"], "parts": [msg["content"]]} for msg in chat_history]
+        prompt = build_rag_prompt(context, history, question, current_datetime)
+        response = model.generate_content(prompt, generation_config={"temperature": 0.2})
+        print("Gemini Response ->")
+        return response.text
+
+    # === GPT ===
+    elif "gpt" in chat_model.lower():
+        messages = [{"role": m["role"], "content": m["content"]} for m in chat_history]
+        if context:
+            messages.insert(0, {"role": "system", "content": f"Context:\n{context}"})
+        messages.append({"role": "user", "content": question})
+
+        response = openai.ChatCompletion.create(
+            model=chat_model,
+            messages=messages,
+            temperature=0.4,
+        )
+        return response["choices"][0]["message"]["content"]
+
+    # === Together Model ===
+    else:
+        llm = ChatTogether(
+            together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
+            model=chat_model,
+        )
+        response = llm.predict(prompt)
 
     print("Qdrant Response")
     print(response)
@@ -327,7 +558,7 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
 
 
 def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, pinecone_index_name=None , vs=None , qdrant_client=None):
-    
+
     if vectordb_name == "Chroma":
         from langchain.vectorstores import Chroma
         retriever = Chroma(persist_directory='db', embedding_function=embedding_model_global).as_retriever()
@@ -370,5 +601,3 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
 
     else:
         return "❌ Invalid vector database selection!"
-
-

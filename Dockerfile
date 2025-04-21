@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies and Tor
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -25,24 +25,36 @@ RUN apt-get update && apt-get install -y \
     libappindicator3-1 \
     xdg-utils \
     ca-certificates \
-    tor \
+    libxml2-dev \
+    libxslt-dev \
+    libffi-dev \
+    libssl-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    python3-dev \
     && apt-get clean
 
 # Set work directory
 WORKDIR /app
 
-# Copy your requirements
+# Copy requirements
 COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and its dependencies
+# Install Playwright browsers
 RUN pip install playwright && playwright install --with-deps
 
-# Copy the rest of your app
+# Install Scrapy and Scrapy-Splash
+RUN pip install scrapy scrapy-splash
+
+# Copy your project code
 COPY . .
 
-# Start Tor in the background before launching your app
-CMD service tor start && uvicorn main:app --host 0.0.0.0 --port 8000
+# Expose port for FastAPI
+EXPOSE 8000
+
+# Default command
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
