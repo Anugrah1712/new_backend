@@ -42,35 +42,10 @@ async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data):
                     full_text += para.text.strip() + "\n\n"
             paragraphs.append(full_text)
 
-        # Step 2: Use Playwright for web scraping
-        # async with async_playwright() as p:
-        #     browser = await p.chromium.launch(headless=True)  # <-- Await launch()
-        #     context = await browser.new_context()  # <-- Await new_context()
-        #     page = await context.new_page()  # <-- Await new_page()
-
-        #     for link in links:
-        #         try:
-        #             await page.goto(link, timeout=60000)  # <-- Await page navigation
-        #             await asyncio.sleep(3)  # Allow page to load
-        #             body_text = await page.text_content("body")  # <-- Await text extraction
-        #             paragraphs.extend(body_text.split("\n"))
-
-        #         except Exception as link_error:
-        #             print(f"Failed to process link {link}: {link_error}")
-
-        #     await browser.close()  # <-- Await browser close
     print(f"📄 Total paragraphs after split: {len(paragraphs)}")
     print("🧩 First 5 extracted paragraphs:")
     for i, p in enumerate(paragraphs[:5]):
         print(f"{i+1}. {p[:100]}...")
-    
-    # print("✅ <----------------------------------------------Scraped Data from Webscraping starts here--------------------------->✅ ")
-    # print(scraped_data)
-    # print("✅ <----------------------------------------------Scraped Data from Webscraping ends here----------------------------->✅ ")
-    # print("\n✅ Final Scraped Data Output (truncated):\n", scraped_data[:2000])
-
-    # print("\n✅ Final Scraped Data Output ends here :\n")
-
 
     if scraped_data:
         if isinstance(scraped_data, str):
@@ -267,7 +242,7 @@ sys.modules["sqlite3"] = sqlite3
 
 embedding_model_global = None
 
-async def preprocess_vectordbs(files: list[UploadFile], embedding_model_name, size, overlap ,scraped_data): #scraped_data
+async def preprocess_vectordbs(files: list[UploadFile], embedding_model_name, size, overlap ,scraped_data , selected_vectordb): #scraped_data
     global embedding_model_global
 
     text = await preprocess_text(files,  size, overlap ,scraped_data) # scraped_data
@@ -276,20 +251,31 @@ async def preprocess_vectordbs(files: list[UploadFile], embedding_model_name, si
     embedding_model_global = SentenceTransformerEmbeddings(model_name=embedding_model_name)
     print(f"✅ Total chunks created from scraped+doc input: {len(text)}")
     
-    print("Processing Chroma DB...")
-    vectordb, retriever = preprocess_chroma(text, embedding_model_name, persist_directory)
-    
-    print("Processing FAISS...")
-    index, docstore, index_to_docstore_id, vector_store = preprocess_faiss(text, embedding_model_name)
+    index = docstore = index_to_docstore_id = vector_store = retriever = None
+    pinecone_index_name = vs = qdrant_client = None
 
-    print("Processing Pinecone...")
-    pinecone_index_name = preprocess_pinecone(text, embedding_model_name)
+    if selected_vectordb == "Chroma":
+        print("Processing Chroma DB...")
+        vectordb, retriever = preprocess_chroma(text, embedding_model_name, persist_directory)
 
-    print("Processing Weaviate...")
-    vs = preprocess_weaviate(text, embedding_model_name)  
+    elif selected_vectordb == "FAISS":
+        print("Processing FAISS...")
+        index, docstore, index_to_docstore_id, vector_store = preprocess_faiss(text, embedding_model_name)
 
-    print("Processing Qdrant...")
-    qdrant_client = preprocess_qdrant(text, embedding_model_name)
+    elif selected_vectordb == "Pinecone":
+        print("Processing Pinecone...")
+        pinecone_index_name = preprocess_pinecone(text, embedding_model_name)
+
+    elif selected_vectordb == "Weaviate":
+        print("Processing Weaviate...")
+        vs = preprocess_weaviate(text, embedding_model_name)
+
+    elif selected_vectordb == "Qdrant":
+        print("Processing Qdrant...")
+        qdrant_client = preprocess_qdrant(text, embedding_model_name)
+
+    else:
+        print(f"❌ Unknown vector DB: {selected_vectordb}")
 
     return index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name, vs, qdrant_client  
 

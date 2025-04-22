@@ -44,7 +44,7 @@ async def scrape_web_data(links):
     scraped_data = []
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",

@@ -154,7 +154,7 @@ async def preprocess(
         # Process documents
         try:
             index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name , vs ,qdrant_client= await preprocess_vectordbs(
-            doc_files , embedding_model, chunk_size, chunk_overlap , scraped_data
+            doc_files , embedding_model, chunk_size, chunk_overlap , scraped_data , session_state["selected_vectordb"]
             )
 
             session_state.update({
@@ -215,9 +215,10 @@ async def select_vectordb(vectordb: str = Form(...)):
 
 
 @app.post("/select_chat_model")
-async def select_chat_model(chat_model: str = Form(...)):
+async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Form(None)):
     """ Set selected chat model and persist it """
     session_state["selected_chat_model"] = chat_model
+    session_state["custom_prompt"] = custom_prompt  
 
     # ✅ Save state to pickle file (excluding unpicklable objects)
     session_state_to_save = session_state.copy()
@@ -232,14 +233,17 @@ async def select_chat_model(chat_model: str = Form(...)):
     with open(PICKLE_FILE_PATH, "wb") as f:
         pickle.dump(session_state_to_save, f)
 
-    print(f"✅ Selected Chat Model: {chat_model} (Saved to session state)\n")
-    return {"message": f"Selected Chat Model: {chat_model}"}
+    print(f"✅ Selected Chat Model: {chat_model}")
+    print(f"✅ Stored Custom Prompt:\n{custom_prompt}\n")
+    return {"message": f"Chat model set with custom prompt."}
 
 class ChatRequest(BaseModel):
     prompt: str
 
 @app.post("/chat")
-async def chat_with_bot(prompt: str = Form(...)):
+async def chat_with_bot(prompt: str = Form(...) , custom_prompt: str = Form(None)):
+    print(f"[Debug] Received prompt: {prompt}")
+    print(f"[Debug] Received custom_prompt: {custom_prompt}")
     """ Chatbot interaction """
     if not session_state["preprocessing_done"]:
         raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
@@ -247,6 +251,8 @@ async def chat_with_bot(prompt: str = Form(...)):
     session_state["selected_vectordb"] = session_state.get("selected_vectordb", "FAISS")
     session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
 
+    if not custom_prompt:
+        custom_prompt = session_state.get("custom_prompt", None)
     # Store user message
     session_state["messages"].append({"role": "user", "content": prompt})
 
@@ -263,7 +269,8 @@ async def chat_with_bot(prompt: str = Form(...)):
         session_state["messages"],
         pinecone_index_name,
         vs,
-        qdrant_client
+        qdrant_client,
+        custom_instructions=custom_prompt
         )
 
         # Store assistant response
