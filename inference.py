@@ -8,7 +8,7 @@ from langchain_together import ChatTogether
 import numpy as np
 from dotenv import load_dotenv
 
-load_dotenv()
+# load_dotenv()
 
 # --- API Configuration ---
 genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
