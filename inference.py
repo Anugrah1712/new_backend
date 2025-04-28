@@ -6,9 +6,12 @@ import pytz
 from datetime import datetime
 from langchain_together import ChatTogether
 import numpy as np
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- API Configuration ---
-genai.configure(api_key=("AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY"))
+genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # --- Prompt Builder ---
@@ -35,13 +38,13 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 
         - "Good morning":
             - Valid if current hour is between 5 and 11
-            - If current hour is ≥ 12 → respond: "Actually, it's afternoon now."
-            - If current hour < 5 → respond: "It's still night time."
+            - If current hour is ≥ 12 → respond: "It's Good Afternoon."
+            - If current hour < 5 → respond: "It's Good Night."
 
         - "Good afternoon":
             - Valid if current hour is between 12 and 16
-            - If current hour < 12 → respond: "Actually, it's still morning."
-            - If current hour ≥ 17 → respond: "Actually, it's evening now."
+            - If current hour < 12 → respond: "It's Good Morning."
+            - If current hour ≥ 17 → respond: "It's Good Evening."
 
         - "Good evening":
             - Valid if current hour is between 17 and 20
@@ -116,7 +119,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     else:
         # Together also uses prompt as string
         model = ChatTogether(
-            together_api_key="tgp_v1_QM7pHbJS_DGlxin122m2KkDdsRrMhOWa6zHyOeYEIu4",
+            together_api_key=os.getenv("TOGETHER_API_KEY"),
             model=chat_model
         )
         response = model.predict(prompt)
