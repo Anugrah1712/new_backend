@@ -8,11 +8,13 @@ from langchain_together import ChatTogether
 import numpy as np
 from dotenv import load_dotenv
 
-# load_dotenv()
+load_dotenv()
 
 # --- API Configuration ---
 genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
 openai.api_key = os.getenv("OPENAI_API_KEY")
+together_api_key=os.getenv("TOGETHER_API_KEY")
+print(together_api_key)
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
