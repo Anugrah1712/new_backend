@@ -40,13 +40,13 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 
         - "Good morning":
             - Valid if current hour is between 5 and 11
-            - If current hour is ≥ 12 → respond: "It's Good Afternoon."
-            - If current hour < 5 → respond: "It's Good Night."
+            - If current hour is ≥ 12 → respond: "Good Afternoon."
+            - If current hour < 5 → respond: "Good Night."
 
         - "Good afternoon":
             - Valid if current hour is between 12 and 16
-            - If current hour < 12 → respond: "It's Good Morning."
-            - If current hour ≥ 17 → respond: "It's Good Evening."
+            - If current hour < 12 → respond: "Good Morning."
+            - If current hour ≥ 17 → respond: "Good Evening."
 
         - "Good evening":
             - Valid if current hour is between 17 and 20
@@ -56,7 +56,7 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
         - "Good night":
             - Valid if current hour is ≥ 21 or < 5
             - If current hour is between 5 and 20 → respond: "It's not night yet. You might want to say good morning/afternoon/evening instead."
-
+        -
         - If the greeting is appropriate, respond politely without repeating the same greeting unless the user explicitly asks.
         - If the user is incorrect, politely correct them and provide the correct time-based greeting.
         - If the user asks for the time, provide the current time based on the timestamp.
