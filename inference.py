@@ -12,7 +12,7 @@ load_dotenv()
 
 # --- API Configuration ---
 genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
@@ -103,18 +103,18 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         )
         return response.text
 
-    elif "gpt" in chat_model.lower():
-        # GPT expects messages - so wrap full prompt in a single system message
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": question}
-        ]
-        response = openai.ChatCompletion.create(
-            model=chat_model,
-            messages=messages,
-            temperature=0.4,
-        )
-        return response["choices"][0]["message"]["content"]
+    # elif "gpt" in chat_model.lower():
+    #     # GPT expects messages - so wrap full prompt in a single system message
+    #     messages = [
+    #         {"role": "system", "content": prompt},
+    #         {"role": "user", "content": question}
+    #     ]
+    #     response = openai.ChatCompletion.create(
+    #         model=chat_model,
+    #         messages=messages,
+    #         temperature=0.4,
+    #     )
+    #     return response["choices"][0]["message"]["content"]
 
     else:
         # Together also uses prompt as string
