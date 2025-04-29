@@ -23,20 +23,20 @@ from fastapi.responses import Response
 
 
 # Load environment variables from .env file
-load_dotenv()
+# load_dotenv()
 
 app = FastAPI()
 
 
 # Add all your Vercel frontend URLs
 origins = [
-    os.getenv("DOMAIN1"),
-    os.getenv("DOMAIN"),
-    os.getenv("AWS_IP"),
-    os.getenv("LOCAL"),
-    os.getenv("Frontend_url1"),
-    os.getenv("Frontend_url2"),
-    os.getenv("Frontend_url3"),
+    "https://rag-chatbot-frontend-three.vercel.app",
+    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
+    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app",
+    "http://13.60.34.232:8000",
+    "https://rag-chatbot-web.shop",
+    "http://rag-chatbot-web.shop",
+    "http://localhost:3000"
 ]
 app.add_middleware(
     CORSMiddleware,
