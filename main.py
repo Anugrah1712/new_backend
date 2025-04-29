@@ -30,13 +30,13 @@ app = FastAPI()
 
 # Add all your Vercel frontend URLs
 origins = [
-    "http://rag-chatbot-web.shop",
-    "https://rag-chatbot-web.shop",
-    "http://13.60.34.232:8000",
-    "http://localhost:3000",
-    "https://rag-chatbot-frontend-three.vercel.app",
-    "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
-    "https://rag-chatbot-frontend-git-main-anugrah-mishra-s-projects.vercel.app"  # Added Vercel frontend URL
+    os.getenv("DOMAIN1"),
+    os.getenv("DOMAIN"),
+    os.getenv("AWS_IP"),
+    os.getenv("LOCAL"),
+    os.getenv("Frontend_url1"),
+    os.getenv("Frontend_url2"),
+    os.getenv("Frontend_url3"),
 ]
 app.add_middleware(
     CORSMiddleware,

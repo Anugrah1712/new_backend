@@ -1,9 +1,11 @@
 from playwright.async_api import async_playwright
 import os
 import google.generativeai as genai
+from dotenv import load_dotenv
 
+load_dotenv()
 
-genai.configure(api_key="AIzaSyBNJvzSaKq26JHLLMSlIYaZAzOANtc8FCY")
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 generation_config = {
     "temperature": 1,
@@ -44,7 +46,7 @@ async def scrape_web_data(links):
     scraped_data = []
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
