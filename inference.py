@@ -13,8 +13,7 @@ load_dotenv()
 # --- API Configuration ---
 genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
 openai.api_key = os.getenv("OPENAI_API_KEY")
-together_api_key=os.getenv("TOGETHER_API_KEY")
-print(together_api_key)
+
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
@@ -121,7 +120,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     else:
         # Together also uses prompt as string
         model = ChatTogether(
-            together_api_key=os.getenv("TOGETHER_API_KEY"),
+            together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
             model=chat_model
         )
         response = model.predict(prompt)

@@ -1,11 +1,18 @@
-from playwright.async_api import async_playwright
 import os
+import hashlib
+import pickle
+import asyncio
+from playwright.async_api import async_playwright
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+CACHE_DIR = "scrape_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+genai.configure(api_key="AIzaSyBe-eQo1uquGgPRsolgHTKsnJEBwfqyUhg")
 
 generation_config = {
     "temperature": 1,
@@ -42,11 +49,16 @@ def create_faq_prompt(content):
         "Content:\n\n" + content
     )
 
+def get_cache_filename(url):
+    url_hash = hashlib.sha256(url.encode()).hexdigest()
+    return os.path.join(CACHE_DIR, f"{url_hash}.pkl")
+
 async def scrape_web_data(links):
     scraped_data = []
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -55,7 +67,6 @@ async def scrape_web_data(links):
                 "--disable-gpu"
             ]
         )
-
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
             locale="en-US",
@@ -66,16 +77,24 @@ async def scrape_web_data(links):
                 "Accept-Language": "en-US,en;q=0.9",
                 "DNT": "1",
                 "Upgrade-Insecure-Requests": "1"
-    }
-)
+            }
+        )
         await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {
-            get: () => undefined
+                get: () => undefined
             });
         """)
 
         for url in links:
             try:
+                cache_file = get_cache_filename(url)
+                if os.path.exists(cache_file):
+                    print(f"📦 Loading cached data for URL: {url}")
+                    with open(cache_file, "rb") as f:
+                        data = pickle.load(f)
+                    scraped_data.append(data)
+                    continue
+
                 print(f"\n🌐 Scraping URL: {url}")
                 page = await context.new_page()
                 await page.goto(url, timeout=60000)
@@ -108,24 +127,32 @@ async def scrape_web_data(links):
                 faq_prompt = create_faq_prompt(combined_content)
 
                 print("🤖 Sending table prompt to Gemini...")
-                table_response = model.generate_content(table_prompt)
-                print(f"✅ Gemini Table Response:\n{table_response.text[:1000]}...\n")
+                table_response = await model.generate_content_async(table_prompt)
+                print(f"✅ Gemini Table Response received.\n")
+                print(table_response)
 
                 print("🤖 Sending FAQ prompt to Gemini...")
-                faq_response = model.generate_content(faq_prompt)
-                print(f"✅ Gemini FAQ Response:\n{faq_response.text[:1000]}...\n")
+                faq_response = await model.generate_content_async(faq_prompt)
+                print(f"✅ Gemini FAQ Response received.\n")
+                print(faq_response)
 
-                scraped_data.append({
+                data = {
                     "url": url,
                     "table_analysis": table_response.text,
                     "faq_extraction": faq_response.text,
                     "raw_text": full_text,
                     "tables_raw": structured_table_text
-                })
+                }
+
+                with open(cache_file, "wb") as f:
+                    pickle.dump(data, f)
+
+                scraped_data.append(data)
 
             except Exception as e:
                 print(f"❌ Error scraping {url}: {e}")
                 scraped_data.append({"url": url, "error": str(e)})
 
         await browser.close()
+    print("✅ Web scraping completed!")
     return scraped_data
