@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- API Configuration ---
-genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
-openai.api_key = os.getenv("OPENAI_API_KEY")
+genai.configure(api_key = ("AIzaSyBe-eQo1uquGgPRsolgHTKsnJEBwfqyUhg"))
+openai.api_key = ("OPENAI_API_KEY")
 
 
 # --- Prompt Builder ---
@@ -55,7 +55,7 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
         - "Good night":
             - Valid if current hour is ≥ 21 or < 5
             - If current hour is between 5 and 20 → respond: "It's not night yet. You might want to say good morning/afternoon/evening instead."
-        -
+            
         - If the greeting is appropriate, respond politely without repeating the same greeting unless the user explicitly asks.
         - If the user is incorrect, politely correct them and provide the correct time-based greeting.
         - If the user asks for the time, provide the current time based on the timestamp.
