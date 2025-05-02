@@ -120,7 +120,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     else:
         # Together also uses prompt as string
         model = ChatTogether(
-            together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+            together_api_key="tgp_v1_k-OLxqEgfvlvv3inZKtLQA4_h03C9n_Z-6jrTTq715s",
             model=chat_model
         )
         response = model.predict(prompt)
