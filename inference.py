@@ -17,56 +17,58 @@ openai.api_key = ("OPENAI_API_KEY")
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
-    # Default instructions for greeting and preventing hallucinations
     print("[Debug] Received custom_instructions:", custom_instructions)
+
     default_instructions = f"""[Current Date and Time: {current_datetime}]
 
-    Context: {context}
+Context: {context}
 
-    Chat History: {history}
+Chat History: {history}
 
-    Question: {question}
+User Question: {question}
 
-    Answer to general conversation texts like hello, bye, etc.
+Instructions:
 
-    *Strict Instructions to Avoid Hallucination:*
-    0. Do not mention the current date or time unless:
-        - The user explicitly asks for the time/date.
-        
-    *Greeting Handling Instructions:*
-        - Extract current hour from: "{current_datetime}"
-        - Based on the current time (24-hour format), validate user greetings:
+*General Handling (Greetings and Hallucination Prevention):*
 
-        - "Good morning":
-            - Valid if current hour is between 5 and 11
-            - If current hour is ≥ 12 → respond: "Good Afternoon."
-            - If current hour < 5 → respond: "Good Night."
+1. **Time/Date Mentions:**
+   - Do **not** mention the current date or time unless the user explicitly asks for it.
 
-        - "Good afternoon":
-            - Valid if current hour is between 12 and 16
-            - If current hour < 12 → respond: "Good Morning."
-            - If current hour ≥ 17 → respond: "Good Evening."
+2. **Greeting Handling Based on Time of Day:**
+   - Extract the current hour from: "{current_datetime}" (24-hour format).
+   - Validate and respond to greetings accordingly:
 
-        - "Good evening":
-            - Valid if current hour is between 17 and 20
-            - If current hour < 17 → respond: "Actually, it's still afternoon/morning."
-            - If current hour ≥ 21 → respond: "It's quite late, you might say good night."
+     - **"Good morning":**
+       - Valid if current hour is between 5 and 11.
+       - If hour ≥ 12 → reply: "Good afternoon."
+       - If hour < 5 → reply: "Good night."
 
-        - "Good night":
-            - Valid if current hour is ≥ 21 or < 5
-            - If current hour is between 5 and 20 → respond: "It's not night yet. You might want to say good morning/afternoon/evening instead."
-            
-        - If the greeting is appropriate, respond politely without repeating the same greeting unless the user explicitly asks.
-        - If the user is incorrect, politely correct them and provide the correct time-based greeting.
-        - If the user asks for the time, provide the current time based on the timestamp.
-        - Avoid repeating greetings for each message unless above conditions are met.
-        - Do not agree with incorrect greetings.
+     - **"Good afternoon":**
+       - Valid if current hour is between 12 and 16.
+       - If hour < 12 → reply: "Good morning."
+       - If hour ≥ 17 → reply: "Good evening."
 
-    1. Only answer using the provided context.
-    2. Do not assume or generate information beyond what is explicitly mentioned in the context.
-    3. Be contextually aware of the current time of day using the timestamp.
-    *Response:* 
-    """
+     - **"Good evening":**
+       - Valid if current hour is between 17 and 20.
+       - If hour < 17 → reply: "Actually, it's still afternoon or morning."
+       - If hour ≥ 21 → reply: "It's quite late, you might say good night."
+
+     - **"Good night":**
+       - Valid if current hour is ≥ 21 or < 5.
+       - If hour is between 5 and 20 → reply: "It's not night yet. You might want to say good morning, afternoon, or evening instead."
+
+   - Respond politely when the greeting is appropriate, but do **not** repeat the same greeting unless the user explicitly asks.
+   - If the greeting is incorrect, gently correct the user and suggest the appropriate one based on the time.
+   - If the user asks for the time, provide it based on the timestamp.
+   - Avoid repeating greetings unnecessarily and do **not** agree with incorrect ones.
+
+3. **Strict Hallucination Control:**
+   - Only answer based on the information provided in the **context**.
+   - Do **not** assume or fabricate any facts not explicitly mentioned.
+   - Maintain awareness of the current time of day using the timestamp.
+
+*Response:*
+"""
 
     # If custom instructions are provided, concatenate them to the default instructions
     if custom_instructions:
