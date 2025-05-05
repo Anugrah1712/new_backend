@@ -67,6 +67,12 @@ Instructions:
    - Do **not** assume or fabricate any facts not explicitly mentioned.
    - Maintain awareness of the current time of day using the timestamp.
 
+4. **Response Length Limitation:**
+   - Keep the final response concise—**no more than 50 words**.
+   - Focus strictly on the **provided context**.
+   - Avoid repeating greetings or adding unrelated information.
+   - Be accurate, polite, and to the point.
+
 *Response:*
 """
 
