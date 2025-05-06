@@ -17,7 +17,7 @@ openai.api_key = ("OPENAI_API_KEY")
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
-    print("[Debug] Received custom_instructions:", custom_instructions)
+    # print("[Debug] Received custom_instructions:", custom_instructions)
 
     default_instructions = f"""[Current Date and Time: {current_datetime}]
 
@@ -35,6 +35,7 @@ Instructions:
    - Do **not** mention the current date or time unless the user explicitly asks for it.
 
 2. **Greeting Handling Based on Time of Day:**
+   - Avoid repeating greetings unnecessarily and do **not** agree with incorrect ones.
    - Extract the current hour from: "{current_datetime}" (24-hour format).
    - Validate and respond to greetings accordingly:
 
@@ -60,7 +61,7 @@ Instructions:
    - Respond politely when the greeting is appropriate, but do **not** repeat the same greeting unless the user explicitly asks.
    - If the greeting is incorrect, gently correct the user and suggest the appropriate one based on the time.
    - If the user asks for the time, provide it based on the timestamp.
-   - Avoid repeating greetings unnecessarily and do **not** agree with incorrect ones.
+   
 
 3. **Strict Hallucination Control:**
    - Only answer based on the information provided in the **context**.
@@ -79,21 +80,21 @@ Instructions:
     # If custom instructions are provided, concatenate them to the default instructions
     if custom_instructions:
         print("[Prompt] Custom instructions detected:")
-        print(custom_instructions)
+        # print(custom_instructions)
         full_prompt = default_instructions + "\n" + custom_instructions
     else:
         print("[Prompt] No custom instructions provided.")
         full_prompt = default_instructions
 
     print("[Prompt] Final RAG prompt built:")
-    print(full_prompt)  # print only first 1000 characters for brevity
+    # print(full_prompt)  # print only first 1000 characters for brevity
     return full_prompt
 
 # --- Time Utility ---
 def get_current_datetime():
     ist = pytz.timezone("Asia/Kolkata")
     now = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[Time] Current datetime: {now}")
+    # print(f"[Time] Current datetime: {now}")
     return now
 
 # --- Unified Chat Model Handler ---
@@ -128,15 +129,16 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     else:
         # Together also uses prompt as string
         model = ChatTogether(
-            together_api_key="tgp_v1_J7k-t6vKdy9sX4Mr3OUyEVdipOSuxCaKThAZed1E324",
+            together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
             model=chat_model
         )
         response = model.predict(prompt)
         return response
 
 
+
 # --- FAISS Inference ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, chat_history ,custom_instructions=None):
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, chat_history, custom_instructions=None):
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
@@ -153,12 +155,18 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         if not contexts:
             return "No relevant context found in the documents."
 
+        # Print the documents retrieved by FAISS for debugging purposes
+        print("[FAISS] Retrieved documents:")
+        for doc in contexts:
+            print(doc)
+
         context = "\n\n---\n\n".join(contexts)
-        return run_chat_model(chat_model, context, question, chat_history , custom_instructions)
+        return run_chat_model(chat_model, context, question, chat_history, custom_instructions)
 
     except Exception as e:
         print(f"Error during FAISS inference: {str(e)}")
         return "An error occurred while processing your question."
+
 
 # --- Chroma Inference ---
 def inference_chroma(chat_model, question, retriever, chat_history,custom_instructions=None):
