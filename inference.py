@@ -107,7 +107,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
 
     if "gemini" in chat_model.lower():
         # Gemini expects a single prompt
-        response = genai.GenerativeModel("models/gemini-1.5-pro").generate_content(
+        response = genai.GenerativeModel("models/gemini-1.5-flash").generate_content(
             prompt,
             generation_config={"temperature": 0.2}
         )
