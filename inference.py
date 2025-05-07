@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- API Configuration ---
-genai.configure(api_key = ("AIzaSyBe-eQo1uquGgPRsolgHTKsnJEBwfqyUhg"))
+genai.configure(api_key = ("AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k"))
 openai.api_key = ("OPENAI_API_KEY")
 
 
@@ -129,7 +129,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     else:
         # Together also uses prompt as string
         model = ChatTogether(
-            together_api_key="c51c9bcaa6bf7fae3ce684206311564828c13fa2e91553f915fee01d517ccee9",
+            together_api_key="tgp_v1_l11DnqQV2U4ZhRlsIrcok2tRTI2Kx_o7hwnqaXkF_Ks",
             model=chat_model
         )
         response = model.predict(prompt)

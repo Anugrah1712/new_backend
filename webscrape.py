@@ -12,7 +12,7 @@ load_dotenv()
 CACHE_DIR = "scrape_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-genai.configure(api_key="AIzaSyBe-eQo1uquGgPRsolgHTKsnJEBwfqyUhg")
+genai.configure(api_key="AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k")
 
 generation_config = {
     "temperature": 1,
@@ -58,7 +58,7 @@ async def scrape_web_data(links):
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",

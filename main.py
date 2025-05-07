@@ -134,7 +134,9 @@ async def preprocess(
         if links_list:
             try:
                 print("🌐 Scraping web data...")
-                scraped_data_raw = await scrape_web_data(links_list)
+                scraped_data_raw = []
+                for link in links_list:
+                    scraped_data_raw.extend(await scrape_web_data(link))
                 scraped_data = [
                     "\n\n".join([
                         item.get("page_text", ""),
