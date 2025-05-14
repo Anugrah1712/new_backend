@@ -35,7 +35,8 @@ origins = [
     "https://rag-chatbot-web.shop",
     "http://rag-chatbot-web.shop",
     "http://localhost:3000",
-    "https://datalysis-website.vercel.app"
+    "https://datalysis-website.vercel.app",
+    "https://datalysis.rag-chatbot-web.shop"
 ]
 app.add_middleware(
     CORSMiddleware,
