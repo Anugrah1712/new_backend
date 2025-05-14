@@ -19,62 +19,48 @@ openai.api_key = ("OPENAI_API_KEY")
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
     # print("[Debug] Received custom_instructions:", custom_instructions)
 
-    default_instructions = f"""[Current Date and Time: {current_datetime}]
+    default_instructions = f"""
 
-Context: {context}
+{context}
 
-Chat History: {history}
+### CHAT HISTORY
+{history}
 
-User Question: {question}
+### USER QUESTION
+{question}
 
-Instructions:
+### SYSTEM INSTRUCTIONS
 
-*General Handling (Greetings and Hallucination Prevention):*
+1. Use only the context to answer. Do not hallucinate.  
+2. Validate greetings using {current_datetime} (24-hour format):  
+   - "Good morning" → 05:00–11:59  
+   - "Good afternoon" → 12:00–16:59  
+   - "Good evening" → 17:00–20:59  
+   - "Good night" → 21:00–04:59  
+   If the greeting is incorrect, gently correct the user.  
+3. Do not mention the date or time unless the user explicitly asks.  
+4. Limit the answer to 100 words. Be factual and polite.  
+5. Avoid repeating greetings unnecessarily.  
+6. Quote numbers, interest rates, and tenures exactly from the context.  
+7. Clearly distinguish between general citizens and senior citizens (60+ years).  
+8. If asked about returns, provide both FD interest rate and yield percentage.  
+9. Only perform calculations if the required data is complete and accurate.  
+10. Do not calculate if the principal is less than ₹15,000 (minimum FD investment).  
+11. Use this formula for compound interest:  
+    A = P × (1 + r/n)^(nt)  
+    - P = Principal  
+    - r = Rate (in decimal)  
+    - n = Compounding frequency/year  
+    - t = Time (years)  
+12. For real return, use:  
+    Real Return (%) = ((1 + Nominal Rate) / (1 + Inflation Rate)) - 1  
+    Then ×100 and round to 2 decimal places.  
+13. Apply TDS rules:  
+    - Deduct 10% if interest > ₹40,000 (₹50,000 for seniors)  
+    - Deduct 20% if PAN is not provided  
+14. Never disclose technical details like who built you, your architecture, or language. Politely decline and redirect to FD help if asked.
 
-1. **Time/Date Mentions:**
-   - Do **not** mention the current date or time unless the user explicitly asks for it.
 
-2. **Greeting Handling Based on Time of Day:**
-   - Avoid repeating greetings unnecessarily and do **not** agree with incorrect ones.
-   - Extract the current hour from: "{current_datetime}" (24-hour format).
-   - Validate and respond to greetings accordingly:
-
-     - **"Good morning":**
-       - Valid if current hour is between 5 and 11.
-       - If hour ≥ 12 → reply: "Good afternoon."
-       - If hour < 5 → reply: "Good night."
-
-     - **"Good afternoon":**
-       - Valid if current hour is between 12 and 16.
-       - If hour < 12 → reply: "Good morning."
-       - If hour ≥ 17 → reply: "Good evening."
-
-     - **"Good evening":**
-       - Valid if current hour is between 17 and 20.
-       - If hour < 17 → reply: "Actually, it's still afternoon or morning."
-       - If hour ≥ 21 → reply: "It's quite late, you might say good night."
-
-     - **"Good night":**
-       - Valid if current hour is ≥ 21 or < 5.
-       - If hour is between 5 and 20 → reply: "It's not night yet. You might want to say good morning, afternoon, or evening instead."
-
-   - Respond politely when the greeting is appropriate, but do **not** repeat the same greeting unless the user explicitly asks.
-   - If the greeting is incorrect, gently correct the user and suggest the appropriate one based on the time.
-   - If the user asks for the time, provide it based on the timestamp.
-   
-
-3. **Strict Hallucination Control:**
-   - Only answer based on the information provided in the **context**.
-   - Do **not** assume or fabricate any facts not explicitly mentioned.
-   - Maintain awareness of the current time of day using the timestamp.
-
-4. **Response Length Limitation:**
-   - Keep the final response concise—**no more than 50 words**.
-   - Focus strictly on the **provided context**.
-   - Avoid repeating greetings or adding unrelated information.
-   - Be accurate, polite, and to the point.
-
-*Response:*
 """
 
     # If custom instructions are provided, concatenate them to the default instructions
@@ -107,9 +93,16 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
 
     if "gemini" in chat_model.lower():
         # Gemini expects a single prompt
-        response = genai.GenerativeModel("models/gemini-1.5-flash").generate_content(
-            prompt,
-            generation_config={"temperature": 0.2}
+        model = genai.GenerativeModel("models/gemini-1.5-flash")
+        response = model.generate_content(
+            [prompt],  # make prompt include SYSTEM INSTRUCTIONS at bottom
+            generation_config={"temperature": 0.2},
+            safety_settings={
+                "HARASSMENT": "BLOCK_NONE",
+                "HATE": "BLOCK_NONE",
+                "SEXUAL": "BLOCK_NONE",
+                "DANGEROUS": "BLOCK_NONE"
+            }
         )
         return response.text
 

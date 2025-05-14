@@ -21,12 +21,10 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import Response
 
-
 # Load environment variables from .env file
 # load_dotenv()
 
 app = FastAPI()
-
 
 # Add all your Vercel frontend URLs
 origins = [
