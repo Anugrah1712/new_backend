@@ -38,7 +38,8 @@ origins = [
     "https://datalysis-website.vercel.app",
     "https://marketing.rag-chatbot-web.shop",
     "https://datalysis.rag-chatbot-web.shop",
-    "http://18.205.19.63:8000"
+    "http://18.205.19.63:8000",
+    "https://gptbot-rosy.vercel.app"
 
 ]
 app.add_middleware(
