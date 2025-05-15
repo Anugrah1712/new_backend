@@ -1,158 +1,137 @@
-import os
+# Webscrape
+
 import hashlib
+import os
 import pickle
 import asyncio
 from playwright.async_api import async_playwright
 import google.generativeai as genai
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
 
-CACHE_DIR = "scrape_cache"
-os.makedirs(CACHE_DIR, exist_ok=True)
-
+# Configure Gemini
 genai.configure(api_key="AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-generation_config = {
-    "temperature": 1,
-    "top_p": 0.95,
-    "top_k": 40,
-    "max_output_tokens": 8192,
-    "response_mime_type": "text/plain",
-}
+# Cache path
+CACHE_PATH = "scraped_cache.pkl"
 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash-8b",
-    generation_config=generation_config,
-)
+# Load or create cache
+if os.path.exists(CACHE_PATH):
+    with open(CACHE_PATH, "rb") as f:
+        scraped_cache = pickle.load(f)
+else:
+    scraped_cache = {}
 
-def create_table_prompt(content):
-    return (
-        "You are analyzing a web page with one or more interest rate tables related to Fixed Deposits (FDs). "
-        "For EACH table in the content below:\n"
-        "- Mention the table's heading/title or any label that identifies the table.\n"
-        "- Interpret all rows and columns precisely.\n"
-        "- Clearly explain what each column means.\n"
-        "- Summarize each row’s interest rate for all payout options.\n"
-        "- Highlight the highest available rate and the corresponding tenure/payout.\n"
-        "- Do NOT compare across tables. Each table should be explained independently.\n"
-        "- Include any eligibility criteria near the tables if applicable.\n\n"
-        "Here is the content:\n\n" + content
-    )
+def hash_url(url):
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
-def create_faq_prompt(content):
-    return (
-        "From the content below, extract up to 20 Frequently Asked Questions (FAQs). "
-        "Include both questions found in the content and logical questions a user might ask. Format:\n"
-        "Q: <question>\nA: <answer>\n\n"
-        "Content:\n\n" + content
-    )
+async def scrape_with_playwright(url):
+    url_hash = hash_url(url)
+    if url_hash in scraped_cache:
+        print(f"[CACHE] Using cached data for {url}")
+        return scraped_cache[url_hash]
 
-def get_cache_filename(url):
-    url_hash = hashlib.sha256(url.encode()).hexdigest()
-    return os.path.join(CACHE_DIR, f"{url_hash}.pkl")
-
-async def scrape_web_data(links):
-    scraped_data = []
-
+    print(f"[SCRAPE] Scraping {url}...")
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--disable-gpu"
-            ]
-        )
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-            locale="en-US",
-            viewport={"width": 1280, "height": 800},
-            java_script_enabled=True,
-            permissions=["geolocation"],
-            extra_http_headers={
-                "Accept-Language": "en-US,en;q=0.9",
-                "DNT": "1",
-                "Upgrade-Insecure-Requests": "1"
-            }
-        )
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-        """)
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url, timeout=60000)
+        await page.wait_for_timeout(3000)
 
-        for url in links:
-            try:
-                cache_file = get_cache_filename(url)
-                if os.path.exists(cache_file):
-                    print(f"📦 Loading cached data for URL: {url}")
-                    with open(cache_file, "rb") as f:
-                        data = pickle.load(f)
-                    scraped_data.append(data)
-                    continue
+        # Extract tables
+        tables = await page.query_selector_all("table")
+        table_data_list = []
+        print(f"[DEBUG] Found {len(tables)} table(s).")
 
-                print(f"\n🌐 Scraping URL: {url}")
-                page = await context.new_page()
-                await page.goto(url, timeout=60000)
-                await page.wait_for_timeout(3000)
+        for i, table in enumerate(tables, start=1):
+            rows = await table.query_selector_all("tr")
+            table_data = []
+            for row in rows:
+                cols = await row.query_selector_all("td")
+                col_text = [await col.inner_text() for col in cols if col]
+                if col_text:
+                    table_data.append(col_text)
+            if table_data:
+                print(f"[DEBUG] Table {i} raw data:\n{table_data}")
+                summary = convert_table_to_sentences_gemini(table_data, i)
+                print(f"[DEBUG] Table {i} summary:\n{summary}\n")
+                table_data_list.append(summary)
 
-                full_text = await page.inner_text("body")
-                print(f"✅ Extracted full page text (truncated):\n{full_text[:1000]}...\n")
+        # Extract full body text
+        body = await page.query_selector("body")
+        full_text = await body.inner_text() if body else ""
+        print(f"[DEBUG] Full page text (first 1000 chars):\n{full_text[:1000]}\n")
 
-                structured_tables = []
-                tables = await page.query_selector_all("table")
-                print(f"📊 Found {len(tables)} tables on the page.")
+        # Expand and extract FAQs
+        faqs = []
+        try:
+            faq_container = await page.query_selector(".faqs.aem-GridColumn.aem-GridColumn--default--12")
+            if faq_container:
+                while True:
+                    try:
+                        button = await faq_container.query_selector(".accordion_toggle_show-more")
+                        if button and await button.is_visible():
+                            await button.click()
+                            await page.wait_for_timeout(1000)
+                        else:
+                            break
+                    except:
+                        break
 
-                for i, table in enumerate(tables, start=1):
-                    rows = await table.query_selector_all("tr")
-                    table_data = []
-                    for row in rows:
-                        columns = await row.query_selector_all("th, td")
-                        column_text = [await column.inner_text() for column in columns if column]
-                        if column_text:
-                            table_data.append([cell.strip() for cell in column_text])
-                    if table_data:
-                        structured_table = f"\nTable {i}:\n" + "\n".join([", ".join(row) for row in table_data])
-                        print(f"📋 Extracted Table {i}:\n{structured_table}\n")
-                        structured_tables.append(structured_table)
+                buttons = await faq_container.query_selector_all(".accordion_toggle, .accordion_row")
+                for btn in buttons:
+                    try:
+                        await btn.click()
+                        await page.wait_for_timeout(500)
+                        expanded = await faq_container.query_selector_all(".accordion_body, .accordionbody_links, .aem-rte-content")
+                        for content in expanded:
+                            answer = await content.inner_text()
+                            question = await btn.inner_text()
+                            if answer.strip() and question.strip():
+                                faqs.append({"question": question.strip(), "answer": answer.strip()})
+                    except:
+                        continue
+        except Exception as e:
+            print(f"[DEBUG] FAQ extraction failed: {e}")
 
-                structured_table_text = "\n\n".join(structured_tables)
-                combined_content = full_text + "\n\n" + structured_table_text
-
-                table_prompt = create_table_prompt(combined_content)
-                faq_prompt = create_faq_prompt(combined_content)
-
-                print("🤖 Sending table prompt to Gemini...")
-                table_response = await model.generate_content_async(table_prompt)
-                print(f"✅ Gemini Table Response received.\n")
-                print(table_response)
-
-                print("🤖 Sending FAQ prompt to Gemini...")
-                faq_response = await model.generate_content_async(faq_prompt)
-                print(f"✅ Gemini FAQ Response received.\n")
-                print(faq_response)
-
-                data = {
-                    "url": url,
-                    "table_analysis": table_response.text,
-                    "faq_extraction": faq_response.text,
-                    "raw_text": full_text,
-                    "tables_raw": structured_table_text
-                }
-
-                with open(cache_file, "wb") as f:
-                    pickle.dump(data, f)
-
-                scraped_data.append(data)
-
-            except Exception as e:
-                print(f"❌ Error scraping {url}: {e}")
-                scraped_data.append({"url": url, "error": str(e)})
+        if faqs:
+            print(f"[DEBUG] Extracted {len(faqs)} FAQ(s):")
+            for faq in faqs:
+                print(f"Q: {faq['question']}\nA: {faq['answer']}\n")
 
         await browser.close()
-    print("✅ Web scraping completed!")
-    return scraped_data
+
+        # Combine everything
+        result = {
+            "url": url,
+            "full_text": full_text.strip(),
+            "table_summaries": table_data_list,
+            "faqs": faqs,
+        }
+
+        # Cache result
+        scraped_cache[url_hash] = result
+        with open(CACHE_PATH, "wb") as f:
+            pickle.dump(scraped_cache, f)
+
+        print(f"[SCRAPE DONE] Returning scraped data for {url}\n")
+        return result
+
+
+def convert_table_to_sentences_gemini(table_data, index):
+    table_input = f"Table {index}:\n" + "\n".join([", ".join(row) for row in table_data])
+    chat = model.start_chat(history=[
+        {"role": "user", "parts": [
+            "Convert table to descriptive sentences. For example:\n"
+            "The following information is for the customers under the age of 60 with a special period.● "
+            "For customers with a tenure of 18 months... (rest of example)"
+        ]},
+        {"role": "model", "parts": ["Please provide the table."]}
+    ])
+    response = chat.send_message(table_input)
+    return response.text
+
+async def scrape_web_data(url):
+    return await scrape_with_playwright(url)
+
+

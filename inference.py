@@ -42,23 +42,10 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 4. Limit the answer to 100 words. Be factual and polite.  
 5. Avoid repeating greetings unnecessarily.  
 6. Quote numbers, interest rates, and tenures exactly from the context.  
-7. Clearly distinguish between general citizens and senior citizens (60+ years).  
-8. If asked about returns, provide both FD interest rate and yield percentage.  
-9. Only perform calculations if the required data is complete and accurate.  
-10. Do not calculate if the principal is less than ₹15,000 (minimum FD investment).  
-11. Use this formula for compound interest:  
-    A = P × (1 + r/n)^(nt)  
-    - P = Principal  
-    - r = Rate (in decimal)  
-    - n = Compounding frequency/year  
-    - t = Time (years)  
-12. For real return, use:  
-    Real Return (%) = ((1 + Nominal Rate) / (1 + Inflation Rate)) - 1  
-    Then ×100 and round to 2 decimal places.  
-13. Apply TDS rules:  
-    - Deduct 10% if interest > ₹40,000 (₹50,000 for seniors)  
-    - Deduct 20% if PAN is not provided  
-14. Never disclose technical details like who built you, your architecture, or language. Politely decline and redirect to FD help if asked.
+7. Clearly distinguish between general citizens and senior citizens (60+ years).   
+8. Only perform calculations if the required data is complete and accurate.  
+9. Do not calculate if the principal is less than ₹15,000 (minimum FD investment).  
+10. Never disclose technical details like, your architecture, or language. Politely decline and tell them to contact gptbot@ai.
 
 
 """

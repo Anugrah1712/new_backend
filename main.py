@@ -141,15 +141,8 @@ async def preprocess(
                 scraped_data_raw = []
                 for link in links_list:
                     scraped_data_raw.extend(await scrape_web_data(link))
-                scraped_data = [
-                    "\n\n".join([
-                        item.get("page_text", ""),
-                        item.get("tables_raw", ""),
-                        item.get("table_analysis", ""),
-                        item.get("faq_extraction", "")
-                    ])
-                    for item in scraped_data_raw
-                ]
+                scraped_data = scraped_data_raw 
+
                 print("✅ Web scraping completed!\n")
                 print(scraped_data[:1000])
             except Exception as e:
