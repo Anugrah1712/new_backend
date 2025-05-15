@@ -5,6 +5,7 @@ __pycache__/
  # Ignore pickle files
 *.log
 
+
 # Ignore database and indexes
 db/
 faiss_index/
