@@ -10,6 +10,7 @@ __pycache__/
 db/
 faiss_index/
 
+*.pkl
 
 
 # Ignore virtual environment
