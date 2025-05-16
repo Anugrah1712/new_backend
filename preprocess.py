@@ -51,17 +51,20 @@ async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data):
         if isinstance(scraped_data, str):
             paragraphs.extend(scraped_data.split("\n\n"))  # Break on double newline
         elif isinstance(scraped_data, list):
-            paragraphs.extend(scraped_data)
+            for item in scraped_data:
+                if isinstance(item, dict) and 'full_text' in item:
+                    chunks = [chunk.strip() for chunk in item['full_text'].split("\n\n") if chunk.strip()]
+                    paragraphs.extend(chunks)
 
 
     paragraphs = [para.strip() for para in paragraphs if para.strip()]
-    # print(paragraphs)
+    print(paragraphs)
 
     docs = [LangchainDocument(page_content=para) for para in paragraphs]
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap)
     text_chunks = text_splitter.split_documents(docs)
-    # print(text_chunks)
+    print(text_chunks)
     return text_chunks
 
 def preprocess_chroma(text, embedding_model_name, persist_directory):

@@ -1,21 +1,17 @@
-# Webscrape
-
 import hashlib
 import os
 import pickle
 import asyncio
+from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright
 import google.generativeai as genai
 
-
-# Configure Gemini
+# Gemini setup
 genai.configure(api_key="AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k")
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Cache path
+# Cache file
 CACHE_PATH = "scraped_cache.pkl"
-
-# Load or create cache
 if os.path.exists(CACHE_PATH):
     with open(CACHE_PATH, "rb") as f:
         scraped_cache = pickle.load(f)
@@ -25,24 +21,29 @@ else:
 def hash_url(url):
     return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
-async def scrape_with_playwright(url):
+def is_internal_link(base_url, link):
+    try:
+        parsed_base = urlparse(base_url)
+        parsed_link = urlparse(link)
+        return (parsed_base.netloc == parsed_link.netloc) or (parsed_link.netloc == "")
+    except:
+        return False
+
+async def scrape_page(url, browser):
     url_hash = hash_url(url)
     if url_hash in scraped_cache:
         print(f"[CACHE] Using cached data for {url}")
         return scraped_cache[url_hash]
 
-    print(f"[SCRAPE] Scraping {url}...")
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+    print(f"[SCRAPE] Scraping {url}")
+    page = await browser.new_page()
+    try:
         await page.goto(url, timeout=60000)
         await page.wait_for_timeout(3000)
 
         # Extract tables
         tables = await page.query_selector_all("table")
         table_data_list = []
-        print(f"[DEBUG] Found {len(tables)} table(s).")
-
         for i, table in enumerate(tables, start=1):
             rows = await table.query_selector_all("tr")
             table_data = []
@@ -52,17 +53,14 @@ async def scrape_with_playwright(url):
                 if col_text:
                     table_data.append(col_text)
             if table_data:
-                print(f"[DEBUG] Table {i} raw data:\n{table_data}")
-                summary = convert_table_to_sentences_gemini(table_data, i)
-                print(f"[DEBUG] Table {i} summary:\n{summary}\n")
+                summary = await convert_table_to_sentences_gemini(table_data, i)
                 table_data_list.append(summary)
 
-        # Extract full body text
+        # Extract full text
         body = await page.query_selector("body")
         full_text = await body.inner_text() if body else ""
-        print(f"[DEBUG] Full page text (first 1000 chars):\n{full_text[:1000]}\n")
 
-        # Expand and extract FAQs
+        # Extract FAQs
         faqs = []
         try:
             faq_container = await page.query_selector(".faqs.aem-GridColumn.aem-GridColumn--default--12")
@@ -92,16 +90,8 @@ async def scrape_with_playwright(url):
                     except:
                         continue
         except Exception as e:
-            print(f"[DEBUG] FAQ extraction failed: {e}")
+            print(f"[DEBUG] FAQ extraction failed for {url}: {e}")
 
-        if faqs:
-            print(f"[DEBUG] Extracted {len(faqs)} FAQ(s):")
-            for faq in faqs:
-                print(f"Q: {faq['question']}\nA: {faq['answer']}\n")
-
-        await browser.close()
-
-        # Combine everything
         result = {
             "url": url,
             "full_text": full_text.strip(),
@@ -113,25 +103,91 @@ async def scrape_with_playwright(url):
         scraped_cache[url_hash] = result
         with open(CACHE_PATH, "wb") as f:
             pickle.dump(scraped_cache, f)
+        print("\n================= [SCRAPED PAGE SUMMARY] =================")
+        print(f"URL              : {url}")
+        print(f"Text Length      : {len(full_text.split())} words")
+        print(f"Tables Found     : {len(table_data_list)}")
+        print(f"FAQs Found       : {len(faqs)}")
+        print("Text Preview     :")
+        print(full_text.strip()[:300].replace("\n", " ") + "...")
+        print("===========================================================\n")
 
-        print(f"[SCRAPE DONE] Returning scraped data for {url}\n")
+        print(f"[SCRAPE DONE] {url}")
         return result
 
+    except Exception as e:
+        print(f"[ERROR] Failed to scrape {url}: {e}")
+        return None
+    finally:
+        await page.close()
 
-def convert_table_to_sentences_gemini(table_data, index):
+async def get_internal_links(url, browser):
+    page = await browser.new_page()
+    await page.goto(url, timeout=60000)
+    await page.wait_for_timeout(2000)
+
+    anchors = await page.query_selector_all("a")
+    links = set()
+    for anchor in anchors:
+        try:
+            href = await anchor.get_attribute("href")
+            if href and is_internal_link(url, href):
+                absolute_url = urljoin(url, href.split("#")[0])
+                links.add(absolute_url)
+        except:
+            continue
+    await page.close()
+
+    print(f"[INTERNAL LINKS] Found {len(links)} links in {url}")  # ✅ Move here
+    return list(links)
+
+
+async def scrape_with_playwright_recursive(main_url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
+        to_scrape = set()
+        scraped = set()
+
+        # Start with main page
+        to_scrape.add(main_url)
+        results = []
+
+        while to_scrape:
+            current_url = to_scrape.pop()
+            if current_url in scraped:
+                continue
+
+            print(f"[VISIT] {current_url}")
+            result = await scrape_page(current_url, browser)
+            if result:
+                results.append(result)
+                scraped.add(current_url)
+
+                # Find more links on this page
+                try:
+                    sub_links = await get_internal_links(current_url, browser)
+                    for link in sub_links:
+                        if link not in scraped:
+                            to_scrape.add(link)
+                    
+                except Exception as e:
+                    print(f"[LINKS] Failed to extract internal links from {current_url}: {e}")
+
+        await browser.close()
+        
+        return results
+
+async def convert_table_to_sentences_gemini(table_data, index):
     table_input = f"Table {index}:\n" + "\n".join([", ".join(row) for row in table_data])
     chat = model.start_chat(history=[
         {"role": "user", "parts": [
-            "Convert table to descriptive sentences. For example:\n"
-            "The following information is for the customers under the age of 60 with a special period.● "
-            "For customers with a tenure of 18 months... (rest of example)"
+            "Convert table to descriptive sentences.\n"
+            
         ]},
         {"role": "model", "parts": ["Please provide the table."]}
     ])
-    response = chat.send_message(table_input)
+    response = await chat.send_message(table_input)
     return response.text
 
 async def scrape_web_data(url):
-    return await scrape_with_playwright(url)
-
-
+    return await scrape_with_playwright_recursive(url)
