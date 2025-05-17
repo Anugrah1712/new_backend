@@ -118,9 +118,8 @@ def preprocess_weaviate(text, embedding_model_name):
 
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
 
-    weaviate_url = os.getenv("WEAVIATE_URL=")
-    weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
-
+    os.environ["WEAVIATE_URL"] = "https://yemfpcisciqahol85x2pg.c0.asia-southeast1.gcp.weaviate.cloud"
+    os.environ["WEAVIATE_API_KEY"] = "AgNArYEt5nxZqFOwTj7X1jCEtEBcQyiCRxbw"
 
     client = weaviate.connect_to_weaviate_cloud(
         cluster_url=weaviate_url,
@@ -151,11 +150,11 @@ def preprocess_pinecone(text, embedding_model_name):
 
     # Initialize Pinecone
     pinecone = Pinecone(
-        api_key=os.getenv("PINECONE_API_KEY"),
-        environment=os.getenv("PINECONE_ENV")
+        api_key="pcsk_42Yw14_EaKdaMLiAJfWub3s2sEJYPW3jyXXjdCYkH8Mh8rD8wWJ3pS6oCCC9PGqBNuDTuf",
+        environment="us-east-1"
     )
 
-    index_name = os.getenv("INDEX_NAME")
+    index_name = os.getenv("test5")
     indexes = pinecone.list_indexes().names()
 
     # Create index if it does not exist

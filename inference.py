@@ -14,11 +14,9 @@ load_dotenv()
 genai.configure(api_key = ("AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k"))
 openai.api_key = ("OPENAI_API_KEY")
 
-
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
     # print("[Debug] Received custom_instructions:", custom_instructions)
-
     default_instructions = f"""
 
 {context}
@@ -31,17 +29,13 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 
 ### SYSTEM INSTRUCTIONS
 
-1. Use only the context to answer. Do not hallucinate.  
-2. Do not repeat greetings.
-3. Validate greetings using {current_datetime} (24-hour format):  
-   - "Good morning" → 05:00–11:59  
-   - "Good afternoon" → 12:00–16:59  
-   - "Good evening" → 17:00–20:59  
-   - "Good night" → 21:00–04:59  
-   If the greeting is incorrect, politely correct the user.  
-4. Do not mention the date or time unless the user explicitly asks.  
-5. Limit the answer to 100 words. Be factual and polite.  
-6. Never disclose technical details like, your architecture, or language. Politely decline and tell them to contact gptbot@ai.
+1. Do not hallucinate.  
+2. You are a helpful AI assistant.Answer only using the exact content from the provided context.
+3. If the answer is not found in the context, respond with: "I am not sure about it""
+4. If the user asks for time or date, respond using {current_datetime}. Otherwise, do not mention the time.
+5. Limit your answers to 50 words. Be factual and literal.
+6. Never disclose technical details like your architecture or language. Politely decline and say: "Please contact gptbot@ai."
+
 """
 
     # If custom instructions are provided, concatenate them to the default instructions
@@ -56,6 +50,33 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
     print("[Prompt] Final RAG prompt built:")
     # print(full_prompt)  # print only first 1000 characters for brevity
     return full_prompt
+
+def validate_greeting(user_input):
+    user_input_lower = user_input.lower().strip()
+    now = datetime.now()
+    hour = now.hour
+
+    # Determine appropriate greeting based on current time
+    if 5 <= hour <= 11:
+        correct_greeting = "good morning"
+    elif 12 <= hour <= 16:
+        correct_greeting = "good afternoon"
+    elif 17 <= hour <= 20:
+        correct_greeting = "good evening"
+    else:
+        correct_greeting = "good night"
+
+    # Extended greetings list
+    greetings = [
+        "hello", "hi", "hey", "good morning",
+        "good afternoon", "good evening", "good night"
+    ]
+
+    # If greeting-like input is detected, respond with time-appropriate message
+    if user_input_lower in greetings:
+        return f"{correct_greeting.capitalize()}. How can I help you?"
+
+    return None
 
 # --- Time Utility ---
 def get_current_datetime():
@@ -176,6 +197,12 @@ def inference_qdrant(chat_model, question, embedding_model_global, qdrant_client
 # --- General Inference Dispatcher ---
 def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, pinecone_index_name=None, vs=None, qdrant_client=None ,custom_instructions=None):
     print(f"[Dispatcher] Routing to {vectordb_name} inference...")
+
+        # --- Greeting validation shortcut ---
+    custom_greeting_response = validate_greeting(question)
+    if custom_greeting_response:
+        return custom_greeting_response  # Bypass Gemini/GPT
+
     if vectordb_name == "Chroma":
         from langchain.vectorstores import Chroma
         retriever = Chroma(persist_directory='db', embedding_function=embedding_model_global).as_retriever()
@@ -193,7 +220,7 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
     elif vectordb_name == "Pinecone":
         from pinecone import Pinecone
         if pinecone_index_name:
-            pinecone = Pinecone(api_key=os.getenv("PINECONE_API_KEY"), environment=os.getenv("PINECONE_ENV", "us-east-1"))
+            pinecone = Pinecone(api_key="pcsk_42Yw14_EaKdaMLiAJfWub3s2sEJYPW3jyXXjdCYkH8Mh8rD8wWJ3pS6oCCC9PGqBNuDTuf", environment=os.getenv("PINECONE_ENV", "us-east-1"))
             pinecone_index = pinecone.Index(pinecone_index_name)
             return inference_pinecone(chat_model, question, embedding_model_global, pinecone_index, chat_history,custom_instructions=custom_instructions
 )
