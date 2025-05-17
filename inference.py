@@ -29,9 +29,9 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 
 ### SYSTEM INSTRUCTIONS
 
-1. Do not hallucinate.  
-2. You are a helpful AI assistant.Answer only using the exact content from the provided context.
-3. If the answer is not found in the context, respond with: "I am not sure about it""
+1. Do not hallucinate & repeat greetings after once  
+2. You are a helpful AI assistant.Answer only using the exact content from the provided context & for general questions like "how are you?" repond naturally.
+3. If the answer is not found in the context, respond with: "I am not sure about it" & do not mention : "Based on the provided text".
 4. If the user asks for time or date, respond using {current_datetime}. Otherwise, do not mention the time.
 5. Limit your answers to 50 words. Be factual and literal.
 6. Never disclose technical details like your architecture or language. Politely decline and say: "Please contact gptbot@ai."
