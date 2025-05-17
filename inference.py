@@ -51,12 +51,15 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
     # print(full_prompt)  # print only first 1000 characters for brevity
     return full_prompt
 
+import pytz
+
 def validate_greeting(user_input):
     user_input_lower = user_input.lower().strip()
-    now = datetime.now()
+    ist = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(ist)
     hour = now.hour
 
-    # Determine correct greeting based on current time
+    # Determine correct greeting based on IST time
     if 5 <= hour <= 11:
         correct_greeting = "good morning"
     elif 12 <= hour <= 16:
@@ -66,22 +69,21 @@ def validate_greeting(user_input):
     else:
         correct_greeting = "good night"
 
-    # List of recognized greeting phrases
+    # Recognized greetings
     greetings = ["good morning", "good afternoon", "good evening", "good night"]
 
-    # If user input is exactly a recognized greeting
     if user_input_lower in greetings:
         if user_input_lower == correct_greeting:
             return f"{correct_greeting.capitalize()}. How can I help you?"
         else:
-            return f"{user_input.capitalize()} is incorrect at this time. It is {correct_greeting}. How can I help you?"
+            return f"{correct_greeting.capitalize()}. How can I help you?"
 
-    # Other informal greetings
+    # Informal greetings like "hello"
     informal = ["hello", "hi", "hey", "greetings"]
     if user_input_lower in informal:
         return f"{correct_greeting.capitalize()}. How can I help you?"
 
-    return None  # Not a greeting
+    return None
 
 # --- Time Utility ---
 def get_current_datetime():
