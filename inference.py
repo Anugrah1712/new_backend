@@ -29,13 +29,13 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 
 ### SYSTEM INSTRUCTIONS
 
-1. Do not hallucinate & repeat greetings after once  
+1. Do not hallucinate & do not repeat greetings after once  
 2. You are a helpful AI assistant.Answer only using the exact content from the provided context & for general questions like "how are you?" repond naturally.
-3. If the answer is not found in the context, respond with: "I am not sure about it" & do not mention : "Based on the provided text".
+3. Do not mention : "Based on the provided text".
 4. If the user asks for time or date, respond using {current_datetime}. Otherwise, do not mention the time.
 5. Limit your answers to 50 words. Be factual and literal.
 6. Never disclose technical details like your architecture or language. Politely decline and say: "Please contact gptbot@ai."
-
+7. If the answer is not word-for-word in the context, respond with: "I am not sure about it."
 """
 
     # If custom instructions are provided, concatenate them to the default instructions
@@ -56,7 +56,7 @@ def validate_greeting(user_input):
     now = datetime.now()
     hour = now.hour
 
-    # Determine appropriate greeting based on current time
+    # Determine correct greeting based on current time
     if 5 <= hour <= 11:
         correct_greeting = "good morning"
     elif 12 <= hour <= 16:
@@ -66,17 +66,22 @@ def validate_greeting(user_input):
     else:
         correct_greeting = "good night"
 
-    # Extended greetings list
-    greetings = [
-        "hello", "hi", "hey", "good morning",
-        "good afternoon", "good evening", "good night"
-    ]
+    # List of recognized greeting phrases
+    greetings = ["good morning", "good afternoon", "good evening", "good night"]
 
-    # If greeting-like input is detected, respond with time-appropriate message
+    # If user input is exactly a recognized greeting
     if user_input_lower in greetings:
+        if user_input_lower == correct_greeting:
+            return f"{correct_greeting.capitalize()}. How can I help you?"
+        else:
+            return f"{user_input.capitalize()} is incorrect at this time. It is {correct_greeting}. How can I help you?"
+
+    # Other informal greetings
+    informal = ["hello", "hi", "hey", "greetings"]
+    if user_input_lower in informal:
         return f"{correct_greeting.capitalize()}. How can I help you?"
 
-    return None
+    return None  # Not a greeting
 
 # --- Time Utility ---
 def get_current_datetime():
