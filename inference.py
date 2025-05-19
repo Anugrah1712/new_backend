@@ -144,7 +144,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
-        k = 3
+        k = 5
         D, I = index.search(np.array([query_embedding]), k=k)
 
         contexts = []
