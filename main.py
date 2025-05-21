@@ -1,6 +1,4 @@
-#main.py 
-
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request
 from typing import List
 from preprocess import preprocess_vectordbs
 from inference import inference
@@ -9,24 +7,18 @@ import validators
 import uvicorn
 import json
 import asyncio
+import os
+import pickle
+import tldextract
 from fastapi.middleware.cors import CORSMiddleware
-import os 
-import pickle 
-from pinecone import Pinecone
-import os 
-from dotenv import load_dotenv
-import weaviate
 from fastapi.responses import JSONResponse
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi.responses import Response
-
-# Load environment variables from .env file
-# load_dotenv()
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
 
 app = FastAPI()
 
-# Add all your Vercel frontend URLs
+# Allow frontend CORS origins
 origins = [
     "https://rag-chatbot-frontend-three.vercel.app",
     "https://rag-chatbot-frontend-anugrah-mishra-s-projects.vercel.app",
@@ -40,8 +32,8 @@ origins = [
     "https://datalysis.rag-chatbot-web.shop",
     "http://18.205.19.63:8000",
     "https://gptbot-rosy.vercel.app"
-
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -50,83 +42,61 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+BASE_OUTPUT_DIR = "projects"  # All project folders will go here
+os.makedirs(BASE_OUTPUT_DIR, exist_ok=True)
 
-# File path for saved session state
-PICKLE_FILE_PATH = "session_state.pkl"
+session_state = {
+    "retriever": None,
+    "preprocessing_done": False,
+    "index": None,
+    "docstore": None,
+    "embedding_model_global": None,
+    "selected_vectordb": "FAISS",
+    "selected_chat_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "messages": []
+}
 
-# Load previous session if exists
-if os.path.exists(PICKLE_FILE_PATH):
-    with open(PICKLE_FILE_PATH, "rb") as f:
-        session_state = pickle.load(f)
-        print("✅ Loaded saved session state!")
+# ----------------------------- 🔧 Helper to Extract Domain ----------------------------- #
+def extract_domain_from_request(request: Request):
+    referer = request.headers.get("referer") or request.headers.get("origin")
+    if referer:
+        domain_info = tldextract.extract(referer)
+        domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
+        return domain
+    return None
 
-    # Reinitialize Pinecone dynamically
-    if session_state.get("pinecone_index_name"):
-        pinecone = Pinecone(api_key="pcsk_42Yw14_EaKdaMLiAJfWub3s2sEJYPW3jyXXjdCYkH8Mh8rD8wWJ3pS6oCCC9PGqBNuDTuf", environment="us-east-1")
-        session_state["pinecone_index"] = pinecone.Index(session_state["pinecone_index_name"])
-
-    # ✅ Ensure last selected vector DB and chat model are retained
-    session_state.setdefault("selected_vectordb", session_state.get("selected_vectordb", "FAISS"))
-    session_state.setdefault("selected_chat_model", session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo"))
-
-        # ✅ Initialize Weaviate Client if Needed
-    if session_state.get("vs"):
-        weaviate_url = "https://n7v1k2wxqnk4uaqwu4gaxg.c0.asia-southeast1.gcp.weaviate.cloud"
-        weaviate_api_key = "4zMmRnEgkX42PNGLYGQMpyFdqpxD5sDkhZL0"
-        session_state["weaviate_client"] = weaviate.connect_to_weaviate_cloud(
-            cluster_url=weaviate_url,
-            auth_credentials=weaviate.AuthApiKey(weaviate_api_key),
-            skip_init_checks=True
-        )
-
-    # ✅ Initialize Qdrant Client if Needed
-    if session_state.get("qdrant_client") is None:
-        from qdrant_client import QdrantClient
-        qdrant_url = "https://7a0284df-8bde-48b6-9e34-3f2528dcdba7.europe-west3-0.gcp.cloud.qdrant.io:6333"
-        qdrant_api_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.uDGc0_umW-4NwCfOTcbcT7bupSDIo0MmbQU5dXILWiM"
-        session_state["qdrant_client"] = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)    
-
-else:
-    session_state = {
-        "retriever": None,
-        "preprocessing_done": False,
-        "index": None,
-        "docstore": None,
-        "embedding_model_global": None,
-        "pinecone_index_name": None,
-        "pinecone_index": None,
-        "vs": None,
-        "qdrant_client": None,
-        "weaviate_client": None,
-        "selected_vectordb": "FAISS",
-        "selected_chat_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        "messages": []
-    }
+# ------------------------ 🔧 Helper to Rebuild FAISS Retriever ------------------------ #
+async def rebuild_faiss_retriever(index_path: str):
+    embeddings = HuggingFaceEmbeddings()
+    vector_store = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    return retriever, vector_store.index, vector_store.docstore, vector_store
 
 @app.post("/preprocess")
 async def preprocess(
+    request: Request,
     doc_files: List[UploadFile] = File(...),
     links: str = Form(...),
     embedding_model: str = Form(...),
     chunk_size: int = Form(...),
     chunk_overlap: int = Form(...)
 ):
-    """ Preprocessing: Handle document uploads and web scraping """
-    
     try:
         print("\n🔍 Preprocessing Started...")
-        print(f"📂 Received {len(doc_files)} document(s)")
-        print(f"🔗 Links received: {links}")
-        print(f"📊 Embedding Model: {embedding_model}")
-        print(f"🔢 Chunk Size: {chunk_size}, Chunk Overlap: {chunk_overlap}")
 
-        # Validate links
+        # Extract domain from the request origin (frontend domain)
+        domain = extract_domain_from_request(request)
+        if not domain:
+            domain = "local_upload"
+
+        domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
+        os.makedirs(domain_folder, exist_ok=True)
+
         links_list = json.loads(links)
         for link in links_list:
             if not validators.url(link):
                 raise HTTPException(status_code=400, detail=f"❌ Invalid URL: {link}")
 
-        # Validate uploaded files
         if not doc_files and not links_list:
             raise HTTPException(status_code=400, detail="❌ No documents or links provided for preprocessing!")
 
@@ -134,26 +104,32 @@ async def preprocess(
             if file.filename == "":
                 raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
-        # Web scraping
+        # Extract domain
+        domain = "local_upload"
+        if links_list:
+            domain_info = tldextract.extract(links_list[0])
+            domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
+
+        domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
+        os.makedirs(domain_folder, exist_ok=True)
+
+        scraped_data = []
         if links_list:
             try:
                 print("🌐 Scraping web data...")
-                scraped_data_raw = []
                 for link in links_list:
-                    scraped_data_raw.extend(await scrape_web_data(link))
-                scraped_data = scraped_data_raw 
-
-                print("✅ Web scraping completed!\n")
-                print(scraped_data[:1000])
+                    scraped_data.extend(await scrape_web_data(link))
+                with open(os.path.join(domain_folder, "scraped_cache.pkl"), "wb") as f:
+                    pickle.dump(scraped_data, f)
+                print("✅ Scraped data saved to:", domain_folder)
             except Exception as e:
-                print(f"❌ Web scraping failed: {str(e)}\n")
+                print(f"❌ Web scraping failed: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
-    
-        # Process documents
         try:
-            index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name , vs ,qdrant_client= await preprocess_vectordbs(
-            doc_files , embedding_model, chunk_size, chunk_overlap , scraped_data , session_state["selected_vectordb"]
+            index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name, vs, qdrant_client = await preprocess_vectordbs(
+                doc_files, embedding_model, chunk_size, chunk_overlap, scraped_data, session_state["selected_vectordb"],
+                persist_directory=os.path.join(domain_folder, "faiss_index")
             )
 
             session_state.update({
@@ -162,148 +138,104 @@ async def preprocess(
                 "index": index,
                 "docstore": docstore,
                 "embedding_model_global": embedding_model_global,
-                "pinecone_index_name": pinecone_index_name,  
-                "vs": vs ,
+                "pinecone_index_name": pinecone_index_name,
+                "vs": vs,
                 "qdrant_client": qdrant_client
             })
 
+            state_to_save = session_state.copy()
+            state_to_save.pop("retriever", None)
+            state_to_save.pop("index", None)
+            state_to_save.pop("docstore", None)
 
-           # **Save state to pickle file (excluding non-pickleable objects)**
-            session_state_to_save = session_state.copy()
-            session_state_to_save.pop("retriever", None)
-            session_state_to_save.pop("index", None)
-            session_state_to_save.pop("docstore", None)
-            session_state_to_save.pop("pinecone_index", None) 
-            session_state_to_save.pop("vs", None)
-            session_state_to_save.pop("qdrant_client", None)
+            with open(os.path.join(domain_folder, "session_state.pkl"), "wb") as f:
+                pickle.dump(state_to_save, f)
 
-            with open(PICKLE_FILE_PATH, "wb") as f:
-                pickle.dump(session_state_to_save, f)
-
-            print("💾 Session state saved (excluding non-pickleable objects)!")
-            return {"message": "Preprocessing completed successfully!"}
-
+            print("💾 Session state saved to:", domain_folder)
+            return {"message": f"Preprocessing completed and saved in {domain_folder}"}
         except Exception as e:
-            print(f"❌ Error in preprocess_vectordbs: {str(e)}\n")
+            print(f"❌ Error in preprocess_vectordbs: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Preprocessing failed: {str(e)}")
 
     except Exception as e:
-        print(f"❌ Unexpected Error: {str(e)}\n")
+        print(f"❌ Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unexpected Error: {str(e)}")
 
 @app.post("/select_vectordb")
 async def select_vectordb(vectordb: str = Form(...)):
-    """ Set selected vector database and persist it """
     session_state["selected_vectordb"] = vectordb
-
-    # ✅ Save state to pickle file (excluding unpicklable objects)
-    session_state_to_save = session_state.copy()
-    session_state_to_save.pop("retriever", None)
-    session_state_to_save.pop("index", None)
-    session_state_to_save.pop("docstore", None)
-    session_state_to_save.pop("pinecone_index", None)  # ✅ Exclude Pinecone
-    session_state_to_save.pop("vs", None)
-    session_state_to_save.pop("qdrant_client", None)
-
-    with open(PICKLE_FILE_PATH, "wb") as f:
-        pickle.dump(session_state_to_save, f)
-
-    print(f"✅ Selected Vector Database: {vectordb} (Saved to session state)\n")
-    return {"message": f"Selected Vector Database: {vectordb}"}
-
-
+    print(f"✅ Selected Vector DB: {vectordb}")
+    return {"message": f"Vector DB set to: {vectordb}"}
 
 @app.post("/select_chat_model")
 async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Form(None)):
-    """ Set selected chat model and persist it """
     session_state["selected_chat_model"] = chat_model
-    session_state["custom_prompt"] = custom_prompt  
-
-    # ✅ Save state to pickle file (excluding unpicklable objects)
-    session_state_to_save = session_state.copy()
-    session_state_to_save.pop("retriever", None)
-    session_state_to_save.pop("index", None)
-    session_state_to_save.pop("docstore", None)
-    session_state_to_save.pop("pinecone_index", None)  # ✅ Exclude Pinecone
-    session_state_to_save.pop("vs", None)
-    session_state_to_save.pop("qdrant_client", None)  # ✅ Exclude Qdrant client
-
-
-    with open(PICKLE_FILE_PATH, "wb") as f:
-        pickle.dump(session_state_to_save, f)
-
-    print(f"✅ Selected Chat Model: {chat_model}")
-    print(f"✅ Stored Custom Prompt:\n{custom_prompt}\n")
-    return {"message": f"Chat model set with custom prompt."}
+    session_state["custom_prompt"] = custom_prompt
+    print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}")
+    return {"message": f"Chat model set."}
 
 class ChatRequest(BaseModel):
     prompt: str
 
+# ---------------------------- 💬 CHAT Endpoint ---------------------------- #
 @app.post("/chat")
-async def chat_with_bot(prompt: str = Form(...) , custom_prompt: str = Form(None)):
-    print(f"[Debug] Received prompt: {prompt}")
-    print(f"[Debug] Received custom_prompt: {custom_prompt}")
-    """ Chatbot interaction """
-    if not session_state["preprocessing_done"]:
-        raise HTTPException(status_code=400, detail="❌ Preprocessing must be completed before inferencing.")
+async def chat_with_bot(request: Request, prompt: str = Form(...), custom_prompt: str = Form(None)):
+    domain = extract_domain_from_request(request)
+    if not domain:
+        raise HTTPException(status_code=400, detail="❌ Cannot determine domain from request headers.")
 
-    session_state["selected_vectordb"] = session_state.get("selected_vectordb", "FAISS")
-    session_state["selected_chat_model"] = session_state.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
+    domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
+    session_file = os.path.join(domain_folder, "session_state.pkl")
 
+    if not os.path.exists(session_file):
+        raise HTTPException(status_code=400, detail="❌ Session not found. Please preprocess data first.")
+
+    with open(session_file, "rb") as f:
+        loaded_session = pickle.load(f)
+
+    vector_db_dir = os.path.join(domain_folder, "faiss_index")
+    retriever, index, docstore, vs = await rebuild_faiss_retriever(vector_db_dir)
+
+    messages = loaded_session.get("messages", [])
+    embedding_model = loaded_session.get("embedding_model_global", None)
+    selected_vectordb = loaded_session.get("selected_vectordb", "FAISS")
+    selected_chat_model = loaded_session.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
+
+    messages.append({"role": "user", "content": prompt})
     if not custom_prompt:
-        custom_prompt = session_state.get("custom_prompt", None)
-    # Store user message
-    session_state["messages"].append({"role": "user", "content": prompt})
-
-    pinecone_index_name = session_state.get("pinecone_index_name", None)
-    vs = session_state.get("vs", None)
-    qdrant_client = session_state.get("qdrant_client", None)
+        custom_prompt = loaded_session.get("custom_prompt", None)
 
     try:
         response = inference(
-        session_state["selected_vectordb"],
-        session_state["selected_chat_model"],
-        prompt,
-        session_state["embedding_model_global"],
-        session_state["messages"],
-        pinecone_index_name,
-        vs,
-        qdrant_client,
-        custom_instructions=custom_prompt
+            selected_vectordb,
+            selected_chat_model,
+            prompt,
+            embedding_model,
+            messages,
+            custom_instructions=custom_prompt
         )
-
-        # Store assistant response
-        session_state["messages"].append({"role": "assistant", "content": response})
-
-        print(f"🤖 Chatbot Response: {response}\n")
+        messages.append({"role": "assistant", "content": response})
         return {"response": response}
-
     except Exception as e:
-        print(f"❌ Error in inference: {str(e)}\n")
-        raise HTTPException(status_code=500, detail=f"Inference Error: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+    
 @app.post("/reset")
 async def reset_chat():
-    """ Reset chatbot history and delete saved state """
-    session_state["messages"] = []
-    session_state["preprocessing_done"] = False
-    session_state["retriever"] = None
-    session_state["index"] = None
-    session_state["docstore"] = None
-    session_state["embedding_model_global"] = None
+    session_state.update({
+        "retriever": None,
+        "preprocessing_done": False,
+        "index": None,
+        "docstore": None,
+        "embedding_model_global": None,
+        "messages": []
+    })
+    print("🔄 Chat session reset.")
+    return {"message": "Session reset successfully."}
 
-
-    # Delete the saved session file
-    if os.path.exists(PICKLE_FILE_PATH):
-        os.remove(PICKLE_FILE_PATH)
-        print("🗑️ Saved session state deleted!")
-
-    return {"message": "Chat history reset and session state cleared!"}
-
-@app.api_route("/", methods=["GET", "HEAD"])
+@app.get("/")
 def read_root():
     return {"message": "Hello, World!"}
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))  # Use Render's dynamic port
-    uvicorn.run(app, host="0.0.0.0", port=port, workers=1) 
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
