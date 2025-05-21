@@ -42,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE_OUTPUT_DIR = "projects"  # All project folders will go here
+BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR", os.path.join(os.path.dirname(__file__), "projects"))
 os.makedirs(BASE_OUTPUT_DIR, exist_ok=True)
 
 session_state = {
