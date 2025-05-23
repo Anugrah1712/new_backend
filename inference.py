@@ -147,6 +147,11 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
 
         if faiss_index_dir is None:
             return "❌ FAISS index directory not provided."
+        print("🔍 Looking for FAISS index in:", faiss_index_dir)
+        try:
+            print("📂 Contents:", os.listdir(faiss_index_dir))
+        except Exception as e:
+            print("⚠️ Error reading directory:", e)
 
         faiss_index_path = os.path.join(faiss_index_dir, "index.faiss")
         if os.path.exists(faiss_index_path):

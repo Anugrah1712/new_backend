@@ -46,6 +46,10 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR", os.path.join(BASE_DIR, "projects"))
 os.makedirs(BASE_OUTPUT_DIR, exist_ok=True)
 
+print("🧱 BASE_OUTPUT_DIR =", BASE_OUTPUT_DIR)
+print("🧱 Contents of BASE_OUTPUT_DIR:", os.listdir(BASE_OUTPUT_DIR))
+
+
 session_state = {
     "retriever": None,
     "preprocessing_done": False,
@@ -70,7 +74,10 @@ def extract_domain_from_request(request: Request):
 # ------------------------ 🔧 Helper to Rebuild FAISS Retriever ------------------------ #
 async def rebuild_faiss_retriever(index_path: str):
     embeddings = HuggingFaceEmbeddings()
-    vector_store = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+    abs_index_path = os.path.abspath(index_path)
+    print("📌 Absolute FAISS index path:", abs_index_path)
+    vector_store = FAISS.load_local(abs_index_path, embeddings, allow_dangerous_deserialization=True)
+
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     return retriever, vector_store.index, vector_store.docstore, vector_store
 
