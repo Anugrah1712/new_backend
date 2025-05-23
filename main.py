@@ -63,6 +63,7 @@ def extract_domain_from_request(request: Request):
     if referer:
         domain_info = tldextract.extract(referer)
         domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
+        print(f"🔍 Domain from referer: {referer} → Parsed domain: {domain}")
         return domain
     return None
 
