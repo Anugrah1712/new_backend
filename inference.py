@@ -135,7 +135,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         return "An error occurred while processing your question."
 
 # --- Dispatcher (Only FAISS retained) ---
-def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, custom_instructions=None):
+def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, custom_instructions=None, faiss_index_dir=None):
     print(f"[Dispatcher] Routing to {vectordb_name} inference...")
 
     custom_greeting_response = validate_greeting(question)
@@ -144,11 +144,18 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
 
     if vectordb_name == "FAISS":
         from langchain.vectorstores import FAISS
-        faiss_index_path = "faiss_index/index.faiss"
+
+        if faiss_index_dir is None:
+            return "❌ FAISS index directory not provided."
+
+        faiss_index_path = os.path.join(faiss_index_dir, "index.faiss")
         if os.path.exists(faiss_index_path):
-            faiss_store = FAISS.load_local("faiss_index", embedding_model_global, allow_dangerous_deserialization=True)
-            return inference_faiss(chat_model, question, embedding_model_global, faiss_store.index, faiss_store.docstore, chat_history, custom_instructions)
+            faiss_store = FAISS.load_local(faiss_index_dir, embedding_model_global, allow_dangerous_deserialization=True)
+            return inference_faiss(
+                chat_model, question, embedding_model_global,
+                faiss_store.index, faiss_store.docstore, chat_history, custom_instructions
+            )
         else:
-            return "❌ FAISS index file not found. Please run preprocessing first."
+            return f"❌ FAISS index file not found at {faiss_index_path}. Please run preprocessing first."
     else:
         return "❌ Invalid vector database selection! Only FAISS is supported."

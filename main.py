@@ -207,13 +207,15 @@ async def chat_with_bot(request: Request, prompt: str = Form(...), custom_prompt
         custom_prompt = loaded_session.get("custom_prompt", None)
 
     try:
+        faiss_index_dir = os.path.join(BASE_OUTPUT_DIR, domain, "faiss_index")
         response = inference(
             selected_vectordb,
             selected_chat_model,
             prompt,
             embedding_model,
             messages,
-            custom_instructions=custom_prompt
+            custom_instructions=custom_prompt,
+            faiss_index_dir=faiss_index_dir
         )
         messages.append({"role": "assistant", "content": response})
         return {"response": response}
