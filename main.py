@@ -1,3 +1,5 @@
+# main.py
+
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request
 from typing import List
 from preprocess import preprocess_vectordbs
@@ -91,7 +93,7 @@ async def preprocess(
     chunk_overlap: int = Form(...)
 ):
     try:
-        print("\n🔍 Preprocessing Started...")
+        print("\n🛠️ [PREPROCESS] ➤ Started preprocessing request.")
 
         # Extract domain from the request origin (frontend domain)
         domain = extract_domain_from_request(request)
@@ -100,46 +102,51 @@ async def preprocess(
 
         domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
         os.makedirs(domain_folder, exist_ok=True)
+        print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
 
         links_list = json.loads(links)
+        print(f"🌐 [PREPROCESS] ➤ Received {len(links_list)} links for scraping.")
         for link in links_list:
+            print(f"🔗 Validating link: {link}")
             if not validators.url(link):
                 raise HTTPException(status_code=400, detail=f"❌ Invalid URL: {link}")
 
-        if not doc_files and not links_list:
-            raise HTTPException(status_code=400, detail="❌ No documents or links provided for preprocessing!")
-
+        print(f"📎 [PREPROCESS] ➤ Uploaded {len(doc_files)} files:")
         for file in doc_files:
+            print(f"   └── {file.filename}")
             if file.filename == "":
                 raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
-        # Extract domain
-        domain = "local_upload"
+        # Extract domain from links if any
         if links_list:
             domain_info = tldextract.extract(links_list[0])
             domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
-
-        domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
-        os.makedirs(domain_folder, exist_ok=True)
+            print(f"🌍 [PREPROCESS] ➤ Derived domain from links: {domain}")
+            domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
+            os.makedirs(domain_folder, exist_ok=True)
 
         scraped_data = []
         if links_list:
             try:
-                print("🌐 Scraping web data...")
+                print("🕸️ [SCRAPER] ➤ Starting web scraping...")
                 for link in links_list:
                     scraped_data.extend(await scrape_web_data(link))
+                    print(f"✅ [SCRAPER] ➤ Scraped content from: {link}")
                 with open(os.path.join(domain_folder, "scraped_cache.pkl"), "wb") as f:
                     pickle.dump(scraped_data, f)
-                print("✅ Scraped data saved to:", domain_folder)
+                print(f"💾 [SCRAPER] ➤ Scraped data cached at: {domain_folder}")
             except Exception as e:
-                print(f"❌ Web scraping failed: {str(e)}")
+                print(f"❌ [SCRAPER] ➤ Web scraping failed: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
+        print("🧠 [VECTORDB] ➤ Calling preprocess_vectordbs...")
         try:
             index, docstore, index_to_docstore_id, vectorstore, retriever, embedding_model_global, pinecone_index_name, vs, qdrant_client = await preprocess_vectordbs(
                 doc_files, embedding_model, chunk_size, chunk_overlap, scraped_data, session_state["selected_vectordb"],
                 persist_directory=os.path.join(domain_folder, "faiss_index")
             )
+
+            print("✅ [VECTORDB] ➤ Embedding & indexing complete.")
 
             session_state.update({
                 "retriever": retriever,
@@ -160,14 +167,14 @@ async def preprocess(
             with open(os.path.join(domain_folder, "session_state.pkl"), "wb") as f:
                 pickle.dump(state_to_save, f)
 
-            print("💾 Session state saved to:", domain_folder)
+            print("💾 [STATE] ➤ Session state saved to:", domain_folder)
             return {"message": f"Preprocessing completed and saved in {domain_folder}"}
         except Exception as e:
-            print(f"❌ Error in preprocess_vectordbs: {str(e)}")
+            print(f"❌ [VECTORDB] ➤ Error in preprocess_vectordbs: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Preprocessing failed: {str(e)}")
 
     except Exception as e:
-        print(f"❌ Unexpected Error: {str(e)}")
+        print(f"❌ [PREPROCESS] ➤ Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unexpected Error: {str(e)}")
 
 @app.post("/select_vectordb")
@@ -189,30 +196,35 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat_with_bot(payload: ChatRequest, request: Request):
+    print("\n💬 [CHAT] ➤ New chat query received.")
     prompt = payload.query
     domain = payload.project_name
+    print(f"🧾 [CHAT] ➤ Domain: {domain}, Prompt: {prompt}")
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
 
     if not os.path.exists(session_file):
+        print("⚠️ [CHAT] ➤ Session file not found.")
         raise HTTPException(status_code=400, detail="❌ Session not found. Please preprocess data first.")
 
     with open(session_file, "rb") as f:
         loaded_session = pickle.load(f)
+    print("✅ [CHAT] ➤ Session loaded.")
 
     vector_db_dir = os.path.join(domain_folder, "faiss_index")
     retriever, index, docstore, vs = await rebuild_faiss_retriever(vector_db_dir)
+    print("📦 [CHAT] ➤ Retriever rebuilt.")
 
     messages = loaded_session.get("messages", [])
     embedding_model = loaded_session.get("embedding_model_global", None)
     selected_vectordb = loaded_session.get("selected_vectordb", "FAISS")
     selected_chat_model = loaded_session.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
-
-    messages.append({"role": "user", "content": prompt})
     custom_prompt = loaded_session.get("custom_prompt", None)
 
+    messages.append({"role": "user", "content": prompt})
     try:
+        print("🧠 [INFERENCE] ➤ Calling inference engine...")
         faiss_index_dir = os.path.join(BASE_OUTPUT_DIR, domain, "faiss_index")
         response = inference(
             selected_vectordb,
@@ -223,11 +235,14 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             custom_instructions=custom_prompt,
             faiss_index_dir=faiss_index_dir
         )
+        print("✅ [INFERENCE] ➤ Response generated.")
         messages.append({"role": "assistant", "content": response})
         return {"response": response}
     except Exception as e:
+        print(f"❌ [INFERENCE] ➤ Inference error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
-    
+
+
 @app.post("/reset")
 async def reset_chat():
     session_state.update({
@@ -238,7 +253,7 @@ async def reset_chat():
         "embedding_model_global": None,
         "messages": []
     })
-    print("🔄 Chat session reset.")
+    print("🔄 [RESET] ➤ Chat session reset.")
     return {"message": "Session reset successfully."}
 
 @app.get("/")
@@ -248,4 +263,3 @@ def read_root():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
-#done
