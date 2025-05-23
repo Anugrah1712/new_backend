@@ -1,5 +1,6 @@
 FROM python:3.10-slim
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -33,25 +34,27 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && apt-get clean
 
+# Set work directory
 WORKDIR /app
 
+# Copy requirements
 COPY requirements.txt .
 
+# Install Python dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright browsers
 RUN pip install playwright && playwright install --with-deps
+
+# Install Scrapy and Scrapy-Splash
 RUN pip install scrapy scrapy-splash
 
-# Copy app code
+# Copy your project code
 COPY . .
 
-# Create the projects directory during build
-RUN mkdir -p /app/projects
-
-# Optional: make BASE_OUTPUT_DIR configurable
-ENV BASE_OUTPUT_DIR=/app/projects
-
+# Expose port for FastAPI
 EXPOSE 8000
 
+# Default command
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
