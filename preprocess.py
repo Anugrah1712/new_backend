@@ -1,5 +1,3 @@
-# preprocess.py
-
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -70,6 +68,11 @@ async def preprocess_text(files: list[UploadFile], size, overlap, scraped_data):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap)
     split_docs = text_splitter.split_documents(docs)
     print(f"[INFO] Split into {len(split_docs)} text chunks with size={size}, overlap={overlap}")
+
+    # [DEBUG] Print preview of split documents
+    for i, d in enumerate(split_docs[:5]):
+        print(f"[DEBUG] Sample chunk {i+1}: {d.page_content[:300]}...\n")
+
     return split_docs
 
 # Main entrypoint to support multiple vector DBs
@@ -90,6 +93,23 @@ async def preprocess_vectordbs(
         if persist_directory:
             print(f"[INFO] Saving FAISS index to: {persist_directory}")
             vectorstore.save_local(persist_directory)
+
+        # [DEBUG] Validate FAISS docstore contents
+        print("[DEBUG] Verifying FAISS docstore contents:")
+        empty_count = 0
+        for k, v in vectorstore.docstore._dict.items():
+            if not v or not v.page_content.strip():
+                print(f"[WARN] Empty or None docstore entry for key: {k}")
+                empty_count += 1
+        if empty_count == 0:
+            print("[DEBUG] All docstore entries look valid.")
+        else:
+            print(f"[WARN] Found {empty_count} empty/invalid docstore entries.")
+
+        # [DEBUG] Print dimension of a sample embedding
+        sample_text = texts[0].page_content
+        sample_vector = embedding_model.embed_query(sample_text)
+        print(f"[DEBUG] Sample embedding dimension: {len(sample_vector)}")
 
         retriever = vectorstore.as_retriever()
         print("[INFO] FAISS vectorstore ready.")
