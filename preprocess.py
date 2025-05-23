@@ -81,6 +81,7 @@ async def preprocess_vectordbs(
     selected_vectordb, persist_directory=None
 ):
     print(f"[INFO] Preprocessing for vector DB: {selected_vectordb}")
+    
     texts = await preprocess_text(doc_files, chunk_size, chunk_overlap, scraped_data)
 
     print(f"[INFO] Initializing embedding model: {embedding_model_name}")
@@ -88,28 +89,20 @@ async def preprocess_vectordbs(
 
     if selected_vectordb == "FAISS":
         print("[INFO] Building FAISS vectorstore...")
+
+        # ✅ Rebuild from scratch
         vectorstore = FAISS.from_documents(texts, embedding_model)
 
         if persist_directory:
             print(f"[INFO] Saving FAISS index to: {persist_directory}")
             vectorstore.save_local(persist_directory)
 
-        # [DEBUG] Validate FAISS docstore contents
-        print("[DEBUG] Verifying FAISS docstore contents:")
-        empty_count = 0
-        for k, v in vectorstore.docstore._dict.items():
-            if not v or not v.page_content.strip():
-                print(f"[WARN] Empty or None docstore entry for key: {k}")
-                empty_count += 1
-        if empty_count == 0:
-            print("[DEBUG] All docstore entries look valid.")
-        else:
-            print(f"[WARN] Found {empty_count} empty/invalid docstore entries.")
-
-        # [DEBUG] Print dimension of a sample embedding
-        sample_text = texts[0].page_content
-        sample_vector = embedding_model.embed_query(sample_text)
-        print(f"[DEBUG] Sample embedding dimension: {len(sample_vector)}")
+            # ✅ DEBUG: Confirm docstore validity
+            print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
+            print("✅ Sample docstore entries:")
+            for i, (k, v) in enumerate(vectorstore.docstore._dict.items()):
+                print(f"  {i+1}. Key: {k} → Content: {v.page_content[:100] if v else 'None'}")
+                if i >= 4: break  # print first 5 only
 
         retriever = vectorstore.as_retriever()
         print("[INFO] FAISS vectorstore ready.")
@@ -125,4 +118,6 @@ async def preprocess_vectordbs(
             None   # qdrant_client
         )
 
+    # ❌ Moved inside the else block
     raise ValueError(f"[ERROR] Unsupported vector DB selected: {selected_vectordb}")
+
