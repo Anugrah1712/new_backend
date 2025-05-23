@@ -88,7 +88,9 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
                 "DANGEROUS": "BLOCK_NONE"
             }
         )
+        print("Gemini Respone :",response)
         return response.text
+
 
     elif "gpt" in chat_model.lower():
         messages = [

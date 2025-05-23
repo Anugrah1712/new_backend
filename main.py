@@ -189,6 +189,10 @@ class ChatRequest(BaseModel):
 # ---------------------------- 💬 CHAT Endpoint ---------------------------- #
 @app.post("/chat")
 async def chat_with_bot(request: Request, prompt: str = Form(...), custom_prompt: str = Form(None)):
+    # 🔍 Debug: Print raw request body
+    body = await request.body()
+    print("🔍 Raw request body:", body)
+
     domain = extract_domain_from_request(request)
     if not domain:
         raise HTTPException(status_code=400, detail="❌ Cannot determine domain from request headers.")
