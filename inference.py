@@ -90,7 +90,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     history_context = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history])
     prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions)
 
-    if "gemini" in chat_model.lower():
+    if "Google/Gemini" in chat_model.lower():
         print("[Model Handler] Using Gemini model...")
         model = genai.GenerativeModel("models/gemini-1.5-flash")
         response = model.generate_content(
@@ -189,6 +189,10 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
         if os.path.exists(faiss_index_path):
             print("✅ FAISS index file found. Loading...")
             faiss_store = FAISS.load_local(faiss_index_dir, embedding_model_global, allow_dangerous_deserialization=True)
+            # Add your print debug info here:
+            print("✅ Number of documents in docstore:", len(faiss_store.docstore._dict))
+            print("✅ Sample docstore keys:", list(faiss_store.docstore._dict.keys())[:5])
+            print("✅ index_to_docstore_id mapping:", list(faiss_store.index_to_docstore_id.items())[:5])
             return inference_faiss(
                 chat_model, question, embedding_model_global,
                 faiss_store.index, faiss_store.docstore, chat_history, custom_instructions
