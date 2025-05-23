@@ -182,20 +182,15 @@ async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Fo
     session_state["custom_prompt"] = custom_prompt
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}")
     return {"message": f"Chat model set."}
-
-class ChatRequest(BaseModel):
-    prompt: str
-
 # ---------------------------- 💬 CHAT Endpoint ---------------------------- #
-@app.post("/chat")
-async def chat_with_bot(request: Request, prompt: str = Form(...), custom_prompt: str = Form(None)):
-    # 🔍 Debug: Print raw request body
-    body = await request.body()
-    print("🔍 Raw request body:", body)
+class ChatRequest(BaseModel):
+    query: str
+    project_name: str
 
-    domain = extract_domain_from_request(request)
-    if not domain:
-        raise HTTPException(status_code=400, detail="❌ Cannot determine domain from request headers.")
+@app.post("/chat")
+async def chat_with_bot(payload: ChatRequest, request: Request):
+    prompt = payload.query
+    domain = payload.project_name
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
@@ -215,8 +210,7 @@ async def chat_with_bot(request: Request, prompt: str = Form(...), custom_prompt
     selected_chat_model = loaded_session.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
 
     messages.append({"role": "user", "content": prompt})
-    if not custom_prompt:
-        custom_prompt = loaded_session.get("custom_prompt", None)
+    custom_prompt = loaded_session.get("custom_prompt", None)
 
     try:
         faiss_index_dir = os.path.join(BASE_OUTPUT_DIR, domain, "faiss_index")
