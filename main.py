@@ -76,10 +76,10 @@ async def rebuild_faiss_retriever(index_path: str):
     embeddings = HuggingFaceEmbeddings()
     abs_index_path = os.path.abspath(index_path)
     print("📌 Absolute FAISS index path:", abs_index_path)
-    vector_store = FAISS.load_local(abs_index_path, embeddings, allow_dangerous_deserialization=True)
+    vectorstore = FAISS.load_local(abs_index_path, embeddings, allow_dangerous_deserialization=True)
 
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
-    return retriever, vector_store.index, vector_store.docstore, vector_store
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    return retriever, vectorstore.index, vectorstore.docstore, vectorstore
 
 @app.post("/preprocess")
 async def preprocess(
@@ -136,7 +136,7 @@ async def preprocess(
                 raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
         try:
-            index, docstore, index_to_docstore_id, vector_store, retriever, embedding_model_global, pinecone_index_name, vs, qdrant_client = await preprocess_vectordbs(
+            index, docstore, index_to_docstore_id, vectorstore, retriever, embedding_model_global, pinecone_index_name, vs, qdrant_client = await preprocess_vectordbs(
                 doc_files, embedding_model, chunk_size, chunk_overlap, scraped_data, session_state["selected_vectordb"],
                 persist_directory=os.path.join(domain_folder, "faiss_index")
             )
