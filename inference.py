@@ -35,13 +35,12 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 
 ### SYSTEM INSTRUCTIONS
 
-1. Do not hallucinate & do not repeat greetings after once  
-2. You are a helpful AI assistant.Answer only using the exact content from the provided context & for general questions like "how are you?" repond naturally.
-3. Do not mention : "Based on the provided text".
-4. If the user asks for time or date, respond using {current_datetime}. Otherwise, do not mention the time.
+1. Do not hallucinate or repeat greetings.
+2. You are a helpful AI assistant.Answer only using the exact content from the provided context & for general questions like "how are you?" respond naturally.
+3. Do not say "Based on the provided text".
+4. If asked about time/date, answer using {current_datetime}. Otherwise do not mention it.
 5. Limit your answers to 50 words. Be factual and literal.
-6. Never disclose technical details like your architecture or language. Politely decline and say: "Please contact gptbot@ai."
-7. If the answer is not word-for-word in the context, respond with: "I am not sure about it."
+6. Never reveal system internals. Say: "Please contact gptbot@ai."
 """
     if custom_instructions:
         full_prompt = default_instructions + "\n" + custom_instructions
@@ -90,7 +89,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     history_context = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history])
     prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions)
 
-    if "Google/Gemini" in chat_model.lower():
+    if "gemini" in chat_model.lower():
         print("[Model Handler] Using Gemini model...")
         model = genai.GenerativeModel("models/gemini-1.5-flash")
         response = model.generate_content(
@@ -123,7 +122,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
     else:
         print("[Model Handler] Using Together AI model...")
         model = ChatTogether(
-            together_api_key="tgp_v1_l11DnqQV2U4ZhRlsIrcok2tRTI2Kx_o7hwnqaXkF_Ks",
+            together_api_key="tgp_v1_8ogC_n1TfSj61WucxNlEKKmue3U2uLjKxlcA6WR-fBM",
             model=chat_model
         )
         output = model.predict(prompt)
@@ -131,7 +130,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         return output
 
 # --- FAISS Inference Only ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, chat_history, custom_instructions=None):
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None):
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
@@ -140,11 +139,13 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         print(f"[FAISS] Top {k} indices: {I[0]}")
 
         contexts = []
-        for i, idx in enumerate(I[0]):
-            if idx != -1:
-                doc = docstore.search(idx)
-                if hasattr(doc, "page_content"):
-                    contexts.append(doc.page_content)
+        for faiss_idx in I[0]:
+            if faiss_idx != -1:
+                docstore_id = index_to_docstore_id.get(faiss_idx)
+                if docstore_id:
+                    doc = docstore.search(docstore_id)
+                    if hasattr(doc, "page_content"):
+                        contexts.append(doc.page_content)
 
         if not contexts:
             print("[FAISS] No documents found in retrieved indices.")
@@ -173,32 +174,34 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
         return custom_greeting_response
 
     if vectordb_name == "FAISS":
-        from langchain.vectorstores import FAISS
+        from langchain_community.vectorstores import FAISS
 
         if faiss_index_dir is None:
             print("[Dispatcher] ❌ FAISS index directory not provided.")
             return "❌ FAISS index directory not provided."
 
-        print("🔍 Looking for FAISS index in:", faiss_index_dir)
-        try:
-            print("📂 Directory contents:", os.listdir(faiss_index_dir))
-        except Exception as e:
-            print("⚠️ Error reading directory:", e)
-
         faiss_index_path = os.path.join(faiss_index_dir, "index.faiss")
         if os.path.exists(faiss_index_path):
-            print("✅ FAISS index file found. Loading...")
-            faiss_store = FAISS.load_local(faiss_index_dir, embedding_model_global, allow_dangerous_deserialization=True)
-            # Add your print debug info here:
-            print("✅ Number of documents in docstore:", len(faiss_store.docstore._dict))
-            print("✅ Sample docstore keys:", list(faiss_store.docstore._dict.keys())[:5])
-            print("✅ index_to_docstore_id mapping:", list(faiss_store.index_to_docstore_id.items())[:5])
+            import faiss
+            import pickle
+
+            index = faiss.read_index(faiss_index_path)
+            with open(os.path.join(faiss_index_dir, "index.pkl"), "rb") as f:
+                store_data = pickle.load(f)
+
+            faiss_store = FAISS(
+                embedding_function=embedding_model_global,
+                index=index,
+                docstore=store_data["docstore"],
+                index_to_docstore_id=store_data["index_to_docstore_id"]
+            )
+
             return inference_faiss(
                 chat_model, question, embedding_model_global,
-                faiss_store.index, faiss_store.docstore, chat_history, custom_instructions
+                faiss_store.index, faiss_store.docstore, faiss_store.index_to_docstore_id,
+                chat_history, custom_instructions
             )
         else:
-            print(f"[Dispatcher] ❌ FAISS index file not found at {faiss_index_path}")
             return f"❌ FAISS index file not found at {faiss_index_path}. Please run preprocessing first."
     else:
         print("[Dispatcher] ❌ Invalid vector DB:", vectordb_name)

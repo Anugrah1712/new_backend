@@ -15,8 +15,8 @@ import tldextract
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from langchain.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 app = FastAPI()
 
@@ -59,7 +59,7 @@ session_state = {
     "docstore": None,
     "embedding_model_global": None,
     "selected_vectordb": "FAISS",
-    "selected_chat_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "selected_chat_model": None,
     "messages": []
 }
 
@@ -74,14 +74,43 @@ def extract_domain_from_request(request: Request):
     return None
 
 # ------------------------ 🔧 Helper to Rebuild FAISS Retriever ------------------------ #
-async def rebuild_faiss_retriever(index_path: str):
-    embeddings = HuggingFaceEmbeddings()
-    abs_index_path = os.path.abspath(index_path)
-    print("📌 Absolute FAISS index path:", abs_index_path)
-    vectorstore = FAISS.load_local(abs_index_path, embeddings, allow_dangerous_deserialization=True)
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import SentenceTransformerEmbeddings
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
-    return retriever, vectorstore.index, vectorstore.docstore, vectorstore
+import faiss
+import pickle
+import os
+
+async def rebuild_faiss_retriever(index_path: str):
+    model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    embeddings = SentenceTransformerEmbeddings(model_name=model_name)
+
+    abs_index_path = os.path.abspath(index_path)
+    index_faiss_path = os.path.join(abs_index_path, "index.faiss")
+    index_pkl_path = os.path.join(abs_index_path, "index.pkl")
+
+    # ✅ Proper FAISS load with docstore + mapping
+    index = faiss.read_index(index_faiss_path)
+
+    with open(index_pkl_path, "rb") as f:
+        store_data = pickle.load(f)
+
+    vectorstore = FAISS(
+        embedding_function=embeddings,
+        index=index,
+        docstore=store_data["docstore"],
+        index_to_docstore_id=store_data["index_to_docstore_id"]
+    )
+
+    # ✅ Optional debug print
+    print("✅ Docstore size:", len(vectorstore.docstore._dict))
+    print("✅ Index-to-docstore-id mapping keys (sample):", list(vectorstore.index_to_docstore_id.keys())[:5])
+
+    keys = list(vectorstore.docstore._dict.keys())[:5]
+    for i, k in enumerate(keys):
+        print(f"[✅] Doc {i+1} (ID: {k}) preview: {vectorstore.docstore._dict[k].page_content[:120]}")
+
+    return vectorstore.as_retriever()
 
 @app.post("/preprocess")
 async def preprocess(
@@ -145,7 +174,8 @@ async def preprocess(
                 doc_files, embedding_model, chunk_size, chunk_overlap, scraped_data, session_state["selected_vectordb"],
                 persist_directory=os.path.join(domain_folder, "faiss_index")
             )
-
+            print(f"🧾 [POST-PROCESS] Docstore preview: {list(docstore._dict.keys())[:5]}")
+            print(f"🔗 [POST-PROCESS] Index to Docstore ID: {list(index_to_docstore_id.items())[:5]}")
             print("✅ [VECTORDB] ➤ Embedding & indexing complete.")
 
             session_state.update({
@@ -184,11 +214,42 @@ async def select_vectordb(vectordb: str = Form(...)):
     return {"message": f"Vector DB set to: {vectordb}"}
 
 @app.post("/select_chat_model")
-async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Form(None)):
+async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Form(None), request: Request = None):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}")
+
+    # Extract domain from referer/origin header like in preprocess
+    domain = None
+    if request:
+        domain = extract_domain_from_request(request)
+    if not domain:
+        domain = "local_upload"
+    domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
+
+    # Load existing session state pickle (if exists)
+    session_file = os.path.join(domain_folder, "session_state.pkl")
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, "rb") as f:
+                loaded_session = pickle.load(f)
+        except:
+            loaded_session = {}
+    else:
+        loaded_session = {}
+
+    # Update loaded session with the new chat model and prompt
+    loaded_session["selected_chat_model"] = chat_model
+    loaded_session["custom_prompt"] = custom_prompt
+
+    # Save back to file
+    with open(session_file, "wb") as f:
+        pickle.dump(loaded_session, f)
+
+    print(f"💾 [STATE] ➤ Chat model saved in session state at: {session_file}")
+
     return {"message": f"Chat model set."}
+
 # ---------------------------- 💬 CHAT Endpoint ---------------------------- #
 class ChatRequest(BaseModel):
     query: str
@@ -208,24 +269,45 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print("⚠️ [CHAT] ➤ Session file not found.")
         raise HTTPException(status_code=400, detail="❌ Session not found. Please preprocess data first.")
 
-    with open(session_file, "rb") as f:
-        loaded_session = pickle.load(f)
-    print("✅ [CHAT] ➤ Session loaded.")
-
-    vector_db_dir = os.path.join(domain_folder, "faiss_index")
-    retriever, index, docstore, vs = await rebuild_faiss_retriever(vector_db_dir)
-    print("📦 [CHAT] ➤ Retriever rebuilt.")
+    try:
+        with open(session_file, "rb") as f:
+            loaded_session = pickle.load(f)
+        print("✅ [CHAT] ➤ Session loaded.")
+    except Exception as e:
+        print(f"❌ [CHAT] ➤ Failed to load session state: {e}")
+        raise HTTPException(status_code=500, detail="❌ Failed to load session state.")
 
     messages = loaded_session.get("messages", [])
     embedding_model = loaded_session.get("embedding_model_global", None)
     selected_vectordb = loaded_session.get("selected_vectordb", "FAISS")
-    selected_chat_model = loaded_session.get("selected_chat_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo")
+    selected_chat_model = loaded_session.get("selected_chat_model", None)
     custom_prompt = loaded_session.get("custom_prompt", None)
 
+    # ✅ REBUILD and USE the FAISS retriever
+    faiss_index_dir = os.path.join(domain_folder, "faiss_index")
+    retriever = await rebuild_faiss_retriever(faiss_index_dir)
+    print("📦 [CHAT] ➤ Retriever rebuilt.")
+
+    if not retriever:
+        print("❌ [CHAT] ➤ Retriever not found.")
+        raise HTTPException(status_code=500, detail="Retriever not available. Please preprocess data again.")
+
+    # ✅ Debug: test retrieval BEFORE inference
+    try:
+        docs = retriever.get_relevant_documents(prompt)
+        print(f"🔍 [DEBUG] ➤ Retrieved {len(docs)} documents for query.")
+        for i, doc in enumerate(docs):
+            snippet = doc.page_content[:200].replace('\n', ' ')
+            print(f"📄 Doc {i+1}: {snippet}...")
+    except Exception as e:
+        print(f"❌ [DEBUG] ➤ Document retrieval failed: {e}")
+
+    # Append user message
     messages.append({"role": "user", "content": prompt})
+
+    # 🔄 Inference call
     try:
         print("🧠 [INFERENCE] ➤ Calling inference engine...")
-        faiss_index_dir = os.path.join(BASE_OUTPUT_DIR, domain, "faiss_index")
         response = inference(
             selected_vectordb,
             selected_chat_model,
@@ -241,7 +323,6 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     except Exception as e:
         print(f"❌ [INFERENCE] ➤ Inference error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
-
 
 @app.post("/reset")
 async def reset_chat():

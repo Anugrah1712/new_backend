@@ -1,3 +1,5 @@
+#preprocess.py
+
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -6,13 +8,15 @@ from fastapi import UploadFile
 from dotenv import load_dotenv
 from io import BytesIO
 import os
-import numpy as np
 import faiss
+import pickle
+import numpy as np
 from langchain_community.embeddings import SentenceTransformerEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.docstore.in_memory import InMemoryDocstore
+from langchain_community.vectorstores import FAISS
+from langchain_community.docstore.in_memory import InMemoryDocstore
 import sys
 import sqlite3
+from langchain_community.vectorstores import FAISS
 
 # Fix for FAISS SQLite dependency in some environments
 sys.modules["sqlite3"] = sqlite3
@@ -83,26 +87,50 @@ async def preprocess_vectordbs(
     print(f"[INFO] Preprocessing for vector DB: {selected_vectordb}")
     
     texts = await preprocess_text(doc_files, chunk_size, chunk_overlap, scraped_data)
+    print(f"[DEBUG] Number of documents/chunks: {len(texts)}")
+    for i, doc in enumerate(texts[:10]):  # Check the first 10 chunks
+        print(f"[DEBUG] Chunk {i+1} content preview: {repr(doc.page_content[:100])}")
+        if not doc.page_content.strip():
+            print(f"[WARNING] Chunk {i+1} is empty or whitespace!")
 
     print(f"[INFO] Initializing embedding model: {embedding_model_name}")
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
+    embedding_vector = embedding_model.embed_query("test")
+    print("Embedding dimension:", len(embedding_vector))
+
 
     if selected_vectordb == "FAISS":
         print("[INFO] Building FAISS vectorstore...")
-
+        print(f"[INFO] Total document chunks: {len(texts)}")
+        for i, doc in enumerate(texts):
+            if not doc.page_content.strip():
+                print(f"[⚠️] Empty content at chunk {i}")
+            else:
+                print(f"[✅] Chunk {i} preview: {doc.page_content[:80]}...")
         # ✅ Rebuild from scratch
         vectorstore = FAISS.from_documents(texts, embedding_model)
 
-        if persist_directory:
-            print(f"[INFO] Saving FAISS index to: {persist_directory}")
-            vectorstore.save_local(persist_directory)
+    if persist_directory:
+        print(f"[INFO] Saving FAISS index manually to: {persist_directory}")
+        os.makedirs(persist_directory, exist_ok=True)
 
-            # ✅ DEBUG: Confirm docstore validity
-            print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
-            print("✅ Sample docstore entries:")
-            for i, (k, v) in enumerate(vectorstore.docstore._dict.items()):
-                print(f"  {i+1}. Key: {k} → Content: {v.page_content[:100] if v else 'None'}")
-                if i >= 4: break  # print first 5 only
+        # Save FAISS index
+        faiss.write_index(vectorstore.index, os.path.join(persist_directory, "index.faiss"))
+
+        # Save docstore and mapping
+        with open(os.path.join(persist_directory, "index.pkl"), "wb") as f:
+                pickle.dump({
+                "docstore": vectorstore.docstore,
+                "index_to_docstore_id": vectorstore.index_to_docstore_id
+            }, f)
+
+        # ✅ DEBUG: Confirm docstore validity
+        print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
+        print("✅ Sample docstore entries:")
+        for i, (k, v) in enumerate(vectorstore.docstore._dict.items()):
+            print(f"  {i+1}. Key: {k} → Content: {v.page_content[:100] if v else 'None'}")
+            if i >= 4: break  # print first 5 only
+
 
         retriever = vectorstore.as_retriever()
         print("[INFO] FAISS vectorstore ready.")
