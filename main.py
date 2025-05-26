@@ -62,16 +62,6 @@ session_state = {
     "messages": []
 }
 
-# ----------------------------- 🔧 Helper to Extract Domain ----------------------------- #
-def extract_domain_from_request(request: Request):
-    referer = request.headers.get("referer") or request.headers.get("origin")
-    if referer:
-        domain_info = tldextract.extract(referer)
-        domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
-        print(f"🔍 Domain from referer: {referer} → Parsed domain: {domain}")
-        return domain
-    return None
-
 # ------------------------ 🔧 Helper to Rebuild FAISS Retriever ------------------------ #
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import SentenceTransformerEmbeddings
@@ -114,6 +104,7 @@ async def rebuild_faiss_retriever(index_path: str):
 @app.post("/preprocess")
 async def preprocess(
     request: Request,
+    project_name: str = Form(None),
     doc_files: List[UploadFile] = File(...),
     links: str = Form(...),
     embedding_model: str = Form(...),
@@ -124,10 +115,7 @@ async def preprocess(
         print("\n🛠️ [PREPROCESS] ➤ Started preprocessing request.")
 
         # Extract domain from the request origin (frontend domain)
-        domain = extract_domain_from_request(request)
-        if not domain:
-            domain = "local_upload"
-
+        domain = project_name
         domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
         os.makedirs(domain_folder, exist_ok=True)
         print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
@@ -146,12 +134,22 @@ async def preprocess(
                 raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
         # Extract domain from links if any
-        if links_list:
+        # ✅ Use project_name if provided, else derive from first link
+        if project_name:
+            domain_info = tldextract.extract(project_name)
+            domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
+            print(f"📂 [PREPROCESS] ➤ Using provided project_name as domain: {domain}")
+        elif links_list:
             domain_info = tldextract.extract(links_list[0])
             domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
             print(f"🌍 [PREPROCESS] ➤ Derived domain from links: {domain}")
-            domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
-            os.makedirs(domain_folder, exist_ok=True)
+        else:
+            raise ValueError("Either project_name or links_list must be provided.")
+
+        # ✅ Construct domain folder path
+        domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
+        os.makedirs(domain_folder, exist_ok=True)
+
 
         scraped_data = []
         if links_list:
@@ -213,15 +211,17 @@ async def select_vectordb(vectordb: str = Form(...)):
     return {"message": f"Vector DB set to: {vectordb}"}
 
 @app.post("/select_chat_model")
-async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Form(None), request: Request = None):
+async def select_chat_model(
+    chat_model: str = Form(...),
+    custom_prompt: str = Form(None),
+    project_name: str = Form(None)
+):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}")
 
-    # Extract domain from referer/origin header like in preprocess
-    domain = None
-    if request:
-        domain = extract_domain_from_request(request)
+    # Use project_name directly
+    domain = project_name
     if not domain:
         domain = "local_upload"
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
@@ -242,12 +242,13 @@ async def select_chat_model(chat_model: str = Form(...), custom_prompt: str = Fo
     loaded_session["custom_prompt"] = custom_prompt
 
     # Save back to file
+    os.makedirs(domain_folder, exist_ok=True)
     with open(session_file, "wb") as f:
         pickle.dump(loaded_session, f)
 
     print(f"💾 [STATE] ➤ Chat model saved in session state at: {session_file}")
 
-    return {"message": f"Chat model set."}
+    return {"message": "Chat model set."}
 
 # ---------------------------- 💬 CHAT Endpoint ---------------------------- #
 class ChatRequest(BaseModel):
