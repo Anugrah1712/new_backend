@@ -85,7 +85,11 @@ async def preprocess_vectordbs(
     selected_vectordb, persist_directory=None
 ):
     print(f"[INFO] Preprocessing for vector DB: {selected_vectordb}")
-    
+
+    # ✅ Check: if both PDF and scraped data are missing, raise error
+    if not doc_files and not scraped_data:
+        raise ValueError("No documents or scraped content to process.")
+
     texts = await preprocess_text(doc_files, chunk_size, chunk_overlap, scraped_data)
     print(f"[DEBUG] Number of documents/chunks: {len(texts)}")
     for i, doc in enumerate(texts[:10]):  # Check the first 10 chunks
@@ -98,7 +102,6 @@ async def preprocess_vectordbs(
     embedding_vector = embedding_model.embed_query("test")
     print("Embedding dimension:", len(embedding_vector))
 
-
     if selected_vectordb == "FAISS":
         print("[INFO] Building FAISS vectorstore...")
         print(f"[INFO] Total document chunks: {len(texts)}")
@@ -107,45 +110,46 @@ async def preprocess_vectordbs(
                 print(f"[⚠️] Empty content at chunk {i}")
             else:
                 print(f"[✅] Chunk {i} preview: {doc.page_content[:80]}...")
+
         # ✅ Rebuild from scratch
         vectorstore = FAISS.from_documents(texts, embedding_model)
 
-    if persist_directory:
-        print(f"[INFO] Saving FAISS index manually to: {persist_directory}")
-        os.makedirs(persist_directory, exist_ok=True)
+        if persist_directory:
+            print(f"[INFO] Saving FAISS index manually to: {persist_directory}")
+            os.makedirs(persist_directory, exist_ok=True)
 
-        # Save FAISS index
-        faiss.write_index(vectorstore.index, os.path.join(persist_directory, "index.faiss"))
+            # Save FAISS index
+            faiss.write_index(vectorstore.index, os.path.join(persist_directory, "index.faiss"))
 
-        # Save docstore and mapping
-        with open(os.path.join(persist_directory, "index.pkl"), "wb") as f:
+            # Save docstore and mapping
+            with open(os.path.join(persist_directory, "index.pkl"), "wb") as f:
                 pickle.dump({
-                "docstore": vectorstore.docstore,
-                "index_to_docstore_id": vectorstore.index_to_docstore_id
-            }, f)
+                    "docstore": vectorstore.docstore,
+                    "index_to_docstore_id": vectorstore.index_to_docstore_id
+                }, f)
 
-        # ✅ DEBUG: Confirm docstore validity
-        print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
-        print("✅ Sample docstore entries:")
-        for i, (k, v) in enumerate(vectorstore.docstore._dict.items()):
-            print(f"  {i+1}. Key: {k} → Content: {v.page_content[:100] if v else 'None'}")
-            if i >= 4: break  # print first 5 only
+            # ✅ DEBUG: Confirm docstore validity
+            print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
+            print("✅ Sample docstore entries:")
+            for i, (k, v) in enumerate(vectorstore.docstore._dict.items()):
+                print(f"  {i+1}. Key: {k} → Content: {v.page_content[:100] if v else 'None'}")
+                if i >= 4: break  # print first 5 only
 
+            retriever = vectorstore.as_retriever()
+            print("[INFO] FAISS vectorstore ready.")
+            return (
+                vectorstore.index,
+                vectorstore.docstore,
+                vectorstore.index_to_docstore_id,
+                vectorstore,
+                retriever,
+                embedding_model,
+                None,  # pinecone_index_name
+                None,  # vs
+                None   # qdrant_client
+            )
 
-        retriever = vectorstore.as_retriever()
-        print("[INFO] FAISS vectorstore ready.")
-        return (
-            vectorstore.index,
-            vectorstore.docstore,
-            vectorstore.index_to_docstore_id,
-            vectorstore,
-            retriever,
-            embedding_model,
-            None,  # pinecone_index_name
-            None,  # vs
-            None   # qdrant_client
-        )
-
-    # ❌ Moved inside the else block
+    # ❌ Unsupported DB case
     raise ValueError(f"[ERROR] Unsupported vector DB selected: {selected_vectordb}")
+
 

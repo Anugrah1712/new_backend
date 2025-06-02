@@ -1,16 +1,12 @@
 # main.py
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request
-from typing import List
+from typing import List, Optional
 from preprocess import preprocess_vectordbs
 from inference import inference
 from webscrape import scrape_web_data
-import validators
 import uvicorn
-import json
-import asyncio
-import os
-import pickle
+import os, json, validators, pickle
 import tldextract
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -104,8 +100,8 @@ async def rebuild_faiss_retriever(index_path: str):
 async def preprocess(
     request: Request,
     project_name: str = Form(None),
-    doc_files: List[UploadFile] = File(...),
-    links: str = Form(...),
+    doc_files: Optional[List[UploadFile]] = File(None),
+    links: Optional[str] = Form(None),
     embedding_model: str = Form(...),
     chunk_size: int = Form(...),
     chunk_overlap: int = Form(...)
@@ -113,27 +109,38 @@ async def preprocess(
     try:
         print("\n🛠️ [PREPROCESS] ➤ Started preprocessing request.")
 
-        # Extract domain from the request origin (frontend domain)
+        # ✅ Ensure at least one input is provided
+        if not doc_files and not links:
+            raise HTTPException(status_code=400, detail="❌ You must provide at least one PDF or a URL.")
+
+        # ✅ Extract domain folder
         domain = project_name
         domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
         os.makedirs(domain_folder, exist_ok=True)
         print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
 
-        links_list = json.loads(links)
-        print(f"🌐 [PREPROCESS] ➤ Received {len(links_list)} links for scraping.")
-        for link in links_list:
-            print(f"🔗 Validating link: {link}")
-            if not validators.url(link):
-                raise HTTPException(status_code=400, detail=f"❌ Invalid URL: {link}")
+        # ✅ Process links if provided
+        links_list = []
+        if links:
+            try:
+                links_list = json.loads(links)
+                print(f"🌐 [PREPROCESS] ➤ Received {len(links_list)} links for scraping.")
+                for link in links_list:
+                    print(f"🔗 Validating link: {link}")
+                    if not validators.url(link):
+                        raise HTTPException(status_code=400, detail=f"❌ Invalid URL: {link}")
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="❌ Invalid JSON format for 'links' field.")
 
-        print(f"📎 [PREPROCESS] ➤ Uploaded {len(doc_files)} files:")
-        for file in doc_files:
-            print(f"   └── {file.filename}")
-            if file.filename == "":
-                raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
+        # ✅ Process files if provided
+        if doc_files:
+            print(f"📎 [PREPROCESS] ➤ Uploaded {len(doc_files)} files:")
+            for file in doc_files:
+                print(f"   └── {file.filename}")
+                if file.filename == "":
+                    raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
-        # Extract domain from links if any
-        # ✅ Use project_name if provided, else derive from first link
+        # ✅ Derive domain if not explicitly provided
         if project_name:
             domain_info = tldextract.extract(project_name)
             domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
@@ -145,11 +152,10 @@ async def preprocess(
         else:
             raise ValueError("Either project_name or links_list must be provided.")
 
-        # ✅ Construct domain folder path
         domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
         os.makedirs(domain_folder, exist_ok=True)
 
-
+        # ✅ Scrape web data if links provided
         scraped_data = []
         if links_list:
             try:
@@ -164,10 +170,12 @@ async def preprocess(
                 print(f"❌ [SCRAPER] ➤ Web scraping failed: {str(e)}")
                 raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
+        # ✅ Proceed to vector DB preprocessing
         print("🧠 [VECTORDB] ➤ Calling preprocess_vectordbs...")
         try:
             index, docstore, index_to_docstore_id, vectorstore, retriever, embedding_model_global, pinecone_index_name, vs, qdrant_client = await preprocess_vectordbs(
-                doc_files, embedding_model, chunk_size, chunk_overlap, scraped_data, session_state["selected_vectordb"],
+                doc_files or [], embedding_model, chunk_size, chunk_overlap,
+                scraped_data, session_state["selected_vectordb"],
                 persist_directory=os.path.join(domain_folder, "faiss_index")
             )
             print(f"🧾 [POST-PROCESS] Docstore preview: {list(docstore._dict.keys())[:5]}")
@@ -195,6 +203,7 @@ async def preprocess(
 
             print("💾 [STATE] ➤ Session state saved to:", domain_folder)
             return {"message": f"Preprocessing completed and saved in {domain_folder}"}
+
         except Exception as e:
             print(f"❌ [VECTORDB] ➤ Error in preprocess_vectordbs: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Preprocessing failed: {str(e)}")
