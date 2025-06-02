@@ -27,3 +27,7 @@ scrapy
 scrapy-splash
 openai
 tldextract
+transformers 
+accelerate
+huggingface_hub
+groq

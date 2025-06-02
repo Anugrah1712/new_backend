@@ -7,6 +7,7 @@ import numpy as np
 from datetime import datetime
 from langchain_together import ChatTogether
 from dotenv import load_dotenv
+from groq import Groq
 
 load_dotenv()
 
@@ -127,6 +128,20 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
         return response["choices"][0]["message"]["content"]
 
+    elif chat_model in ["llama3-8b-8192", "llama3-70b-8192"]:
+        print("[Model Handler] Using Groq model...")
+        client = Groq(api_key="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")  
+        response = client.chat.completions.create(
+            model=chat_model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": question}
+            ],
+            temperature=0.4,
+        )
+        print("[Groq Response]", response.choices[0].message.content)
+        return response.choices[0].message.content
+
     else:
         print("[Model Handler] Using Together AI model...")
         model = ChatTogether(
@@ -136,7 +151,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         output = model.predict(prompt)
         print("[Together AI Response]", output)
         return output
-
+    
 # --- FAISS Inference Only ---
 def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None):
     print("[FAISS] Performing FAISS search...")

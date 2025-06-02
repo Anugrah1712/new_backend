@@ -28,7 +28,6 @@ origins = [
     "http://rag-chatbot-web.shop",
     "http://localhost:3000",
     "https://datalysis-website.vercel.app",
-    # "https://marketing.rag-chatbot-web.shop",
     "https://datalysis.rag-chatbot-web.shop",
     "https://gptbot-rosy.vercel.app",
     "https://anugrah-web.vercel.app",
