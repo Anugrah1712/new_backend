@@ -91,18 +91,22 @@ def get_current_datetime():
     return now_str
 
 # --- Unified Chat Model Handler ---
-def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None):
+def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None,  max_output_tokens=1024):
     print(f"[Model Handler] Running chat model: {chat_model}")
+    print(f"[Model Handler] max_output_tokens received: {max_output_tokens}")
+
     current_datetime = get_current_datetime()
     history_context = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history])
-    prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions)
-
+    prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions, max_output_tokens=max_output_tokens)
     if "gemini" in chat_model.lower():
         print("[Model Handler] Using Gemini model...")
         model = genai.GenerativeModel("models/gemini-1.5-flash")
         response = model.generate_content(
             [prompt],
-            generation_config={"temperature": 0.2 , "max_output_tokens": 1024},
+            generation_config={
+                "temperature": 0.2,
+                "max_output_tokens": max_output_tokens  
+            },
             safety_settings={
                 "HARASSMENT": "BLOCK_NONE",
                 "HATE": "BLOCK_NONE",
@@ -123,14 +127,14 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             model=chat_model,
             messages=messages,
             temperature=0.4,
-            max_tokens=1024
+            max_tokens=max_output_tokens  
         )
         print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
         return response["choices"][0]["message"]["content"]
 
     elif chat_model in ["llama3-8b-8192", "llama3-70b-8192"]:
         print("[Model Handler] Using Groq model...")
-        client = Groq(api_key="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")  
+        client = Groq(api_key="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")
         response = client.chat.completions.create(
             model=chat_model,
             messages=[
@@ -138,7 +142,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
                 {"role": "user", "content": question}
             ],
             temperature=0.4,
-            max_tokens=1024
+            max_tokens=max_output_tokens  
         )
         print("[Groq Response]", response.choices[0].message.content)
         return response.choices[0].message.content
@@ -149,12 +153,12 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             together_api_key="tgp_v1_8ogC_n1TfSj61WucxNlEKKmue3U2uLjKxlcA6WR-fBM",
             model=chat_model
         )
-        output = model.predict(prompt, max_tokens=1024)
+        output = model.predict(prompt, max_tokens=max_output_tokens)  # ✅ Reused token limit
         print("[Together AI Response]", output)
         return output
     
 # --- FAISS Inference Only ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None):
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024):
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
@@ -180,14 +184,13 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             print(" -", doc[:200], "...")  # Truncate to avoid log flooding
 
         context = "\n\n---\n\n".join(contexts)
-        return run_chat_model(chat_model, context, question, chat_history, custom_instructions)
-
+        return run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens)
     except Exception as e:
         print(f"[FAISS ERROR] {str(e)}")
         return "An error occurred while processing your question."
 
 # --- Dispatcher (Only FAISS retained) ---
-def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, custom_instructions=None, faiss_index_dir=None):
+def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, custom_instructions=None, faiss_index_dir=None, max_output_tokens=1024):
     print(f"[Dispatcher] Routing to {vectordb_name} inference...")
     print(f" - Chat model: {chat_model}")
     print(f" - Question: {question}")
@@ -223,7 +226,7 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
             return inference_faiss(
                 chat_model, question, embedding_model_global,
                 faiss_store.index, faiss_store.docstore, faiss_store.index_to_docstore_id,
-                chat_history, custom_instructions
+                chat_history, custom_instructions , max_output_tokens=max_output_tokens
             )
         else:
             return f"❌ FAISS index file not found at {faiss_index_path}. Please run preprocessing first."

@@ -223,16 +223,17 @@ async def select_vectordb(vectordb: str = Form(...)):
 async def select_chat_model(
     chat_model: str = Form(...),
     custom_prompt: str = Form(None),
-    project_name: str = Form(None)
+    project_name: str = Form(None),
+    max_output_tokens: int = Form(1024)  # NEW
 ):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
-    print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}")
+    session_state["max_output_tokens"] = max_output_tokens  # NEW
+
+    print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}, Max Tokens: {max_output_tokens}")
 
     # Use project_name directly
-    domain = project_name
-    if not domain:
-        domain = "local_upload"
+    domain = project_name or "local_upload"
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
 
     # Load existing session state pickle (if exists)
@@ -246,9 +247,10 @@ async def select_chat_model(
     else:
         loaded_session = {}
 
-    # Update loaded session with the new chat model and prompt
+    # Update loaded session
     loaded_session["selected_chat_model"] = chat_model
     loaded_session["custom_prompt"] = custom_prompt
+    loaded_session["max_output_tokens"] = max_output_tokens  # NEW
 
     # Save back to file
     os.makedirs(domain_folder, exist_ok=True)
@@ -257,7 +259,8 @@ async def select_chat_model(
 
     print(f"💾 [STATE] ➤ Chat model saved in session state at: {session_file}")
 
-    return {"message": "Chat model set."}
+    return {"message": "Chat model and max_output_tokens set."}
+
 
 # ---------------------------- 💬 CHAT Endpoint ---------------------------- #
 class ChatRequest(BaseModel):
@@ -324,7 +327,8 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             embedding_model,
             messages,
             custom_instructions=custom_prompt,
-            faiss_index_dir=faiss_index_dir
+            faiss_index_dir=faiss_index_dir,
+            max_output_tokens=session_state.get("max_output_tokens", 1024)
         )
         print("✅ [INFERENCE] ➤ Response generated.")
         messages.append({"role": "assistant", "content": response})
