@@ -72,10 +72,8 @@ def validate_greeting(user_input):
         correct_greeting = "good morning"
     elif 12 <= hour <= 16:
         correct_greeting = "good afternoon"
-    elif 17 <= hour <= 20:
+    else :
         correct_greeting = "good evening"
-    else:
-        correct_greeting = "good night"
 
     greetings = ["good morning", "good afternoon", "good evening", "good night"]
     if user_input_lower in greetings or user_input_lower in ["hello", "hi", "hey", "greetings"]:
@@ -104,7 +102,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         model = genai.GenerativeModel("models/gemini-1.5-flash")
         response = model.generate_content(
             [prompt],
-            generation_config={"temperature": 0.2},
+            generation_config={"temperature": 0.2 , "max_output_tokens": 1024},
             safety_settings={
                 "HARASSMENT": "BLOCK_NONE",
                 "HATE": "BLOCK_NONE",
@@ -125,6 +123,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             model=chat_model,
             messages=messages,
             temperature=0.4,
+            max_tokens=1024
         )
         print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
         return response["choices"][0]["message"]["content"]
@@ -139,6 +138,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
                 {"role": "user", "content": question}
             ],
             temperature=0.4,
+            max_tokens=1024
         )
         print("[Groq Response]", response.choices[0].message.content)
         return response.choices[0].message.content
@@ -149,7 +149,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             together_api_key="tgp_v1_8ogC_n1TfSj61WucxNlEKKmue3U2uLjKxlcA6WR-fBM",
             model=chat_model
         )
-        output = model.predict(prompt)
+        output = model.predict(prompt, max_tokens=1024)
         print("[Together AI Response]", output)
         return output
     
