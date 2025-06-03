@@ -158,7 +158,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         return output
     
 # --- FAISS Inference Only ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024):
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None):
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
@@ -184,7 +184,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             print(" -", doc[:200], "...")  # Truncate to avoid log flooding
 
         context = "\n\n---\n\n".join(contexts)
-        return run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens)
+        return run_chat_model(chat_model, context, question, chat_history, custom_instructions)
     except Exception as e:
         print(f"[FAISS ERROR] {str(e)}")
         return "An error occurred while processing your question."
