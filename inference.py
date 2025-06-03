@@ -16,7 +16,7 @@ genai.configure(api_key=("AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k"))
 openai.api_key = ("OPENAI_API_KEY")
 
 # --- Prompt Builder ---
-def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None):
+def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None,  max_output_tokens=None):
     print("[Prompt Builder] Building prompt with:")
     print("- Context length:", len(context))
     print("- Chat history:", history)
@@ -158,7 +158,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         return output
     
 # --- FAISS Inference Only ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None):
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024):
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
@@ -184,7 +184,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             print(" -", doc[:200], "...")  # Truncate to avoid log flooding
 
         context = "\n\n---\n\n".join(contexts)
-        return run_chat_model(chat_model, context, question, chat_history, custom_instructions)
+        return run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens)
     except Exception as e:
         print(f"[FAISS ERROR] {str(e)}")
         return "An error occurred while processing your question."
