@@ -27,7 +27,8 @@ origins = [
     "https://datalysis.rag-chatbot-web.shop",
     "https://gptbot-rosy.vercel.app",
     "https://anugrah-web.vercel.app",
-    "https://kunjeshweb.vercel.app"
+    "https://kunjeshweb.vercel.app",
+    "https://demo-rahi.vercel.app"
 ]
 
 app.add_middleware(
