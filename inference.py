@@ -134,7 +134,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
 
     elif chat_model in ["llama3-8b-8192", "llama3-70b-8192"]:
         print("[Model Handler] Using Groq model...")
-        client = Groq(api_key="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")
+        client = Groq(api_key="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")
         response = client.chat.completions.create(
             model=chat_model,
             messages=[
