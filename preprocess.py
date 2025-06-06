@@ -100,7 +100,7 @@ async def preprocess_vectordbs(
     print(f"[INFO] Initializing embedding model: {embedding_model_name}")
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
     embedding_vector = embedding_model.embed_query("test")
-    print("Embedding dimension:", len(embedding_vector))
+    # print("Embedding dimension:", len(embedding_vector))
 
     if selected_vectordb == "FAISS":
         print("[INFO] Building FAISS vectorstore...")
