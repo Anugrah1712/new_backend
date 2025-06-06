@@ -74,10 +74,10 @@ async def preprocess_text(files: list[UploadFile], size, overlap, scraped_data):
     print(f"[INFO] Split into {len(split_docs)} text chunks with size={size}, overlap={overlap}")
 
     # [DEBUG] Print preview of split documents
-    for i, d in enumerate(split_docs[:5]):
-        print(f"[DEBUG] Sample chunk {i+1}: {d.page_content[:300]}...\n")
+    # for i, d in enumerate(split_docs[:5]):
+    #     print(f"[DEBUG] Sample chunk {i+1}: {d.page_content[:300]}...\n")
 
-    return split_docs
+    # return split_docs
 
 # Main entrypoint to support multiple vector DBs
 async def preprocess_vectordbs(
@@ -91,11 +91,11 @@ async def preprocess_vectordbs(
         raise ValueError("No documents or scraped content to process.")
 
     texts = await preprocess_text(doc_files, chunk_size, chunk_overlap, scraped_data)
-    print(f"[DEBUG] Number of documents/chunks: {len(texts)}")
-    for i, doc in enumerate(texts[:10]):  # Check the first 10 chunks
-        print(f"[DEBUG] Chunk {i+1} content preview: {repr(doc.page_content[:100])}")
-        if not doc.page_content.strip():
-            print(f"[WARNING] Chunk {i+1} is empty or whitespace!")
+    # print(f"[DEBUG] Number of documents/chunks: {len(texts)}")
+    # for i, doc in enumerate(texts[:10]):  # Check the first 10 chunks
+    #     print(f"[DEBUG] Chunk {i+1} content preview: {repr(doc.page_content[:100])}")
+    #     if not doc.page_content.strip():
+    #         print(f"[WARNING] Chunk {i+1} is empty or whitespace!")
 
     print(f"[INFO] Initializing embedding model: {embedding_model_name}")
     embedding_model = SentenceTransformerEmbeddings(model_name=embedding_model_name)
@@ -129,8 +129,8 @@ async def preprocess_vectordbs(
                 }, f)
 
             # ✅ DEBUG: Confirm docstore validity
-            print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
-            print("✅ Sample docstore entries:")
+            # print("✅ Number of documents in docstore:", len(vectorstore.docstore._dict))
+            # print("✅ Sample docstore entries:")
             for i, (k, v) in enumerate(vectorstore.docstore._dict.items()):
                 print(f"  {i+1}. Key: {k} → Content: {v.page_content[:100] if v else 'None'}")
                 if i >= 4: break  # print first 5 only

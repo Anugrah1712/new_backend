@@ -113,6 +113,7 @@ async def scrape_page(url, browser):
         print("===========================================================\n")
 
         print(f"[SCRAPE DONE] {url}")
+        print("Scraped Data--------------------------->", result)
         return result
 
     except Exception as e:
