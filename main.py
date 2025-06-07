@@ -224,13 +224,18 @@ async def select_chat_model(
     chat_model: str = Form(...),
     custom_prompt: str = Form(None),
     project_name: str = Form(None),
-    max_output_tokens: int = Form(1024)  # NEW
+    max_output_tokens: int = Form(1024),  # NEW
+    initial_bot_message: str = Form("Hello! 👋 How can I help you today?"),
+    chatbot_title: str = Form("AI Chat Assistant")
 ):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
     session_state["max_output_tokens"] = max_output_tokens  # NEW
+    session_state["initial_message"] = initial_bot_message
+    session_state["chatbot_title"] = chatbot_title
 
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}, Max Tokens: {max_output_tokens}")
+    print(f"📝 Title: {chatbot_title}, Initial Message: {initial_bot_message}")
 
     # Use project_name directly
     domain = project_name or "local_upload"
@@ -251,6 +256,8 @@ async def select_chat_model(
     loaded_session["selected_chat_model"] = chat_model
     loaded_session["custom_prompt"] = custom_prompt
     loaded_session["max_output_tokens"] = max_output_tokens  # NEW
+    loaded_session["initial_meassage"] = initial_bot_message
+    loaded_session["chatbot_title"] = chatbot_title
 
     # Save back to file
     os.makedirs(domain_folder, exist_ok=True)
@@ -336,6 +343,38 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     except Exception as e:
         print(f"❌ [INFERENCE] ➤ Inference error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+
+@app.get("/get_config")
+async def get_config(project_name: str = "local_upload"):
+    import os
+    import pickle
+
+    domain_folder = os.path.join(BASE_OUTPUT_DIR, project_name)
+    session_file = os.path.join(domain_folder, "session_state.pkl")
+
+    if not os.path.exists(session_file):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Config not found for this project_name"},
+        )
+
+    try:
+        with open(session_file, "rb") as f:
+            session_data = pickle.load(f)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to read session state: {str(e)}"},
+        )
+
+    return {
+        "chatbot_title": session_data.get("chatbot_title", "AI Chat Assistant"),
+        "initial_message": session_data.get("initial_message", "Hello! 👋 How can I help you today?"),
+        "custom_prompt": session_data.get("custom_prompt", ""),
+        "chat_model": session_data.get("selected_chat_model", ""),
+        "max_output_tokens": session_data.get("max_output_tokens", 1024)
+    }
+
 
 @app.post("/reset")
 async def reset_chat():
