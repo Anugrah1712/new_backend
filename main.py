@@ -225,17 +225,17 @@ async def select_chat_model(
     custom_prompt: str = Form(None),
     project_name: str = Form(None),
     max_output_tokens: int = Form(1024),  # NEW
-    initial_bot_message: str = Form("Hello! 👋 How can I help you today?"),
+    initial_message: str = Form("Hello! 👋 How can I help you today?"),
     chatbot_title: str = Form("AI Chat Assistant")
 ):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
     session_state["max_output_tokens"] = max_output_tokens  # NEW
-    session_state["initial_message"] = initial_bot_message
+    session_state["initial_message"] = initial_message
     session_state["chatbot_title"] = chatbot_title
 
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}, Max Tokens: {max_output_tokens}")
-    print(f"📝 Title: {chatbot_title}, Initial Message: {initial_bot_message}")
+    print(f"📝 Title: {chatbot_title}, Initial Message: {initial_message}")
 
     # Use project_name directly
     domain = project_name or "local_upload"
@@ -256,7 +256,7 @@ async def select_chat_model(
     loaded_session["selected_chat_model"] = chat_model
     loaded_session["custom_prompt"] = custom_prompt
     loaded_session["max_output_tokens"] = max_output_tokens  # NEW
-    loaded_session["initial_meassage"] = initial_bot_message
+    loaded_session["initial_message"] = initial_message
     loaded_session["chatbot_title"] = chatbot_title
 
     # Save back to file
