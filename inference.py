@@ -91,71 +91,81 @@ def get_current_datetime():
     return now_str
 
 # --- Unified Chat Model Handler ---
-def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None,  max_output_tokens=1024):
+def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None, max_output_tokens=1024):
     print(f"[Model Handler] Running chat model: {chat_model}")
     print(f"[Model Handler] max_output_tokens received: {max_output_tokens}")
 
     current_datetime = get_current_datetime()
     history_context = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history])
     prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions, max_output_tokens=max_output_tokens)
-    if "gemini" in chat_model.lower():
-        print("[Model Handler] Using Gemini model...")
-        model = genai.GenerativeModel("models/gemini-1.5-flash")
-        response = model.generate_content(
-            [prompt],
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": max_output_tokens  
-            },
-            safety_settings={
-                "HARASSMENT": "BLOCK_NONE",
-                "HATE": "BLOCK_NONE",
-                "SEXUAL": "BLOCK_NONE",
-                "DANGEROUS": "BLOCK_NONE"
-            }
-        )
-        print("[Gemini Response]", response)
-        return response.text
 
-    elif "gpt" in chat_model.lower():
-        print("[Model Handler] Using OpenAI GPT model...")
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": question}
-        ]
-        response = openai.ChatCompletion.create(
-            model=chat_model,
-            messages=messages,
-            temperature=0.4,
-            max_tokens=max_output_tokens  
-        )
-        print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
-        return response["choices"][0]["message"]["content"]
+    try:
+        if "gemini" in chat_model.lower():
+            print("[Model Handler] Using Gemini model...")
+            model = genai.GenerativeModel("models/gemini-1.5-flash")
+            response = model.generate_content(
+                [prompt],
+                generation_config={
+                    "temperature": 0.2,
+                    "max_output_tokens": max_output_tokens
+                },
+                safety_settings={
+                    "HARASSMENT": "BLOCK_NONE",
+                    "HATE": "BLOCK_NONE",
+                    "SEXUAL": "BLOCK_NONE",
+                    "DANGEROUS": "BLOCK_NONE"
+                }
+            )
+            print("[Gemini Response]", response)
+            return response.text
 
-    elif chat_model in ["llama3-8b-8192", "llama3-70b-8192"]:
-        print("[Model Handler] Using Groq model...")
-        client = Groq(api_key="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")
-        response = client.chat.completions.create(
-            model=chat_model,
-            messages=[
+        elif "gpt" in chat_model.lower():
+            print("[Model Handler] Using OpenAI GPT model...")
+            messages = [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": question}
-            ],
-            temperature=0.4,
-            max_tokens=max_output_tokens  
-        )
-        print("[Groq Response]", response.choices[0].message.content)
-        return response.choices[0].message.content
+            ]
+            response = openai.ChatCompletion.create(
+                model=chat_model,
+                messages=messages,
+                temperature=0.4,
+                max_tokens=max_output_tokens
+            )
+            print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
+            return response["choices"][0]["message"]["content"]
 
-    else:
-        print("[Model Handler] Using Together AI model...")
-        model = ChatTogether(
-            together_api_key="tgp_v1_8ogC_n1TfSj61WucxNlEKKmue3U2uLjKxlcA6WR-fBM",
-            model=chat_model
-        )
-        output = model.predict(prompt, max_tokens=max_output_tokens)  # ✅ Reused token limit
-        print("[Together AI Response]", output)
-        return output
+        elif chat_model in ["llama3-8b-8192", "llama3-70b-8192"]:
+            print("[Model Handler] Using Groq model...")
+            client = Groq(api_key="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")
+            response = client.chat.completions.create(
+                model=chat_model,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": question}
+                ],
+                temperature=0.4,
+                max_tokens=max_output_tokens
+            )
+            print("[Groq Response]", response.choices[0].message.content)
+            return response.choices[0].message.content
+
+        else:
+            print("[Model Handler] Using Together AI model...")
+            model = ChatTogether(
+                together_api_key="tgp_v1_8ogC_n1TfSj61WucxNlEKKmue3U2uLjKxlcA6WR-fBM",
+                model=chat_model
+            )
+            output = model.predict(prompt, max_tokens=max_output_tokens)
+            print("[Together AI Response]", output)
+            return output
+
+    except Exception as e:
+        print(f"[Model Handler Error] {e}")
+        error_message = str(e).lower()
+        if any(keyword in error_message for keyword in ["quota", "exceeded", "limit", "exhausted", "invalid api key", "permission denied", "unauthorized"]):
+            return "This service is temporarily unavailable due to exhausted API usage."
+        return f"An error occurred while generating response: {str(e)}"
+
     
 # --- FAISS Inference Only ---
 def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024):
