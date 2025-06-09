@@ -24,60 +24,57 @@ sys.modules["sqlite3"] = sqlite3
 load_dotenv()
 
 # Preprocess uploaded files + scraped data into text chunks
-async def preprocess_text(files: list[UploadFile], size, overlap, scraped_data):
-    print("[INFO] Starting text preprocessing...")
+async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data): #scraped_data
+    import time
+    
     paragraphs = []
-
+    from io import BytesIO
+    # Step 1: Process each file
     for file in files:
-        print(f"[DEBUG] Reading file: {file.filename}")
-        contents = await file.read()
-        file_object = BytesIO(contents)
-
         if file.filename.endswith(".pdf"):
-            print(f"[DEBUG] Detected PDF file: {file.filename}")
+            contents = await file.read()
+            file_object = BytesIO(contents)
             reader = PdfReader(file_object)
             for i, page in enumerate(reader.pages):
-                text = page.extract_text()
-                if text:
-                    clean_text = ' '.join(text.split())
-                    paragraphs.append(clean_text)
-                    print(f"[DEBUG] Extracted text from PDF page {i}")
-
+                page_text = page.extract_text()
+                if page_text:
+                    cleaned_text = ' '.join(page_text.split())
+                    paragraphs.append(cleaned_text)
         elif file.filename.endswith(".docx"):
-            print(f"[DEBUG] Detected DOCX file: {file.filename}")
-            docx = DocxDocument(file_object)
-            full_text = "\n\n".join([para.text.strip() for para in docx.paragraphs if para.text.strip()])
+            
+            file_content = await file.read() 
+            docx_stream = BytesIO(file_content) 
+            docx = DocxDocument(docx_stream)
+            full_text = ""
+            for para in docx.paragraphs:
+                if para.text.strip():
+                    full_text += para.text.strip() + "\n\n"
             paragraphs.append(full_text)
-            print(f"[DEBUG] Extracted text from DOCX file: {file.filename}")
+
+    print(f"📄 Total paragraphs after split: {len(paragraphs)}")
+    print("🧩 First 5 extracted paragraphs:")
+    for i, p in enumerate(paragraphs[:5]):
+        print(f"{i+1}. {p[:100]}...")
 
     if scraped_data:
-        print("[INFO] Including scraped data...")
         if isinstance(scraped_data, str):
-            scraped_chunks = scraped_data.split("\n\n")
-            paragraphs.extend(scraped_chunks)
-            print(f"[DEBUG] Added {len(scraped_chunks)} chunks from scraped string data")
+            paragraphs.extend(scraped_data.split("\n\n"))  # Break on double newline
         elif isinstance(scraped_data, list):
             for item in scraped_data:
                 if isinstance(item, dict) and 'full_text' in item:
                     chunks = [chunk.strip() for chunk in item['full_text'].split("\n\n") if chunk.strip()]
                     paragraphs.extend(chunks)
-                    print(f"[DEBUG] Added {len(chunks)} chunks from scraped list item")
+
 
     paragraphs = [para.strip() for para in paragraphs if para.strip()]
-    print(f"[INFO] Total cleaned paragraphs: {len(paragraphs)}")
+    # print(paragraphs)
 
     docs = [LangchainDocument(page_content=para) for para in paragraphs]
-    print(f"[INFO] Converted to Langchain documents: {len(docs)}")
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap)
-    split_docs = text_splitter.split_documents(docs)
-    print(f"[INFO] Split into {len(split_docs)} text chunks with size={size}, overlap={overlap}")
-
-    # [DEBUG] Print preview of split documents
-    for i, d in enumerate(split_docs[:5]):
-        print(f"[DEBUG] Sample chunk {i+1}: {d.page_content[:300]}...\n")
-
-    return split_docs
+    text_chunks = text_splitter.split_documents(docs)
+    # print(text_chunks)
+    return text_chunks
 
 # Main entrypoint to support multiple vector DBs
 async def preprocess_vectordbs(

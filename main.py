@@ -224,16 +224,22 @@ async def select_chat_model(
     chat_model: str = Form(...),
     custom_prompt: str = Form(None),
     project_name: str = Form(None),
-    max_output_tokens: int = Form(1024),  # NEW
+    max_output_tokens: int = Form(1024),  
     initial_message: str = Form("Hello! 👋 How can I help you today?"),
-    chatbot_title: str = Form("AI Chat Assistant")
+    chatbot_title: str = Form("AI Chat Assistant"),
+    top_k: int = Form(8),  
+    temperature: float = Form(0.3)
 ):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
-    session_state["max_output_tokens"] = max_output_tokens  # NEW
+    session_state["max_output_tokens"] = max_output_tokens 
     session_state["initial_message"] = initial_message
     session_state["chatbot_title"] = chatbot_title
+    session_state["top_k"] = top_k
+    session_state["temperature"] = temperature
 
+
+    print(f"✅ Value of k: {top_k} & Temperature: {temperature}")
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}, Max Tokens: {max_output_tokens}")
     print(f"📝 Title: {chatbot_title}, Initial Message: {initial_message}")
 
@@ -258,6 +264,9 @@ async def select_chat_model(
     loaded_session["max_output_tokens"] = max_output_tokens  # NEW
     loaded_session["initial_message"] = initial_message
     loaded_session["chatbot_title"] = chatbot_title
+    loaded_session["top_k"] = top_k
+    loaded_session["temperature"] = temperature
+
 
     # Save back to file
     os.makedirs(domain_folder, exist_ok=True)
@@ -301,6 +310,9 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     selected_vectordb = loaded_session.get("selected_vectordb", "FAISS")
     selected_chat_model = loaded_session.get("selected_chat_model", None)
     custom_prompt = loaded_session.get("custom_prompt", None)
+    top_k = loaded_session.get("top_k", 8)
+    temperature = loaded_session.get("temperature", 0.3)
+
 
     # ✅ REBUILD and USE the FAISS retriever
     faiss_index_dir = os.path.join(domain_folder, "faiss_index")
@@ -335,7 +347,9 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             messages,
             custom_instructions=custom_prompt,
             faiss_index_dir=faiss_index_dir,
-            max_output_tokens=session_state.get("max_output_tokens", 1024)
+            max_output_tokens=loaded_session.get("max_output_tokens", 1024),
+            top_k=top_k,
+            temperature=temperature
         )
         print("✅ [INFERENCE] ➤ Response generated.")
         messages.append({"role": "assistant", "content": response})
@@ -372,7 +386,9 @@ async def get_config(project_name: str = "local_upload"):
         "initial_message": session_data.get("initial_message", "Hello! 👋 How can I help you today?"),
         "custom_prompt": session_data.get("custom_prompt", ""),
         "chat_model": session_data.get("selected_chat_model", ""),
-        "max_output_tokens": session_data.get("max_output_tokens", 1024)
+        "max_output_tokens": session_data.get("max_output_tokens", 1024),
+        "top_k":session_data.get("top_k"),
+        "temperature":session_data.get("temperature")
     }
 
 

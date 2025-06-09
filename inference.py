@@ -16,7 +16,7 @@ genai.configure(api_key=("AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k"))
 openai.api_key = ("OPENAI_API_KEY")
 
 # --- Prompt Builder ---
-def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None,  max_output_tokens=None):
+def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None, max_output_tokens=None):
     print("[Prompt Builder] Building prompt with:")
     print("- Context length:", len(context))
     print("- Chat history:", history)
@@ -24,9 +24,11 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
     print("- Current datetime:", current_datetime)
     print("- Custom instructions:", custom_instructions is not None)
 
-    default_instructions = f"""
+    # ⚠️ Remove duplicate question if it's the last in history
+    if history.strip().endswith(f"User: {question.strip()}"):
+        history = "\n".join(history.strip().split("\n")[:-1])
 
-{context}
+    combined_context = f"""Below is a conversation and relevant information.
 
 ### CHAT HISTORY
 {history}
@@ -34,24 +36,29 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
 ### USER QUESTION
 {question}
 
+### RETRIEVED DOCUMENT CONTEXT
+{context}
+"""
+
+    default_instructions = f"""
+{combined_context}
+
 ### SYSTEM INSTRUCTIONS
 
-You are a concise, multilingual AI assistant that responds strictly using the given context. Follow these instructions:
+You are a concise, AI assistant that responds strictly using the provided information above (chat history + documents). Follow these instructions:
+Do not repeat questions.
+1. Use relevant details from chat history or context when possible.
+2. Do not hallucinate or fabricate facts.
+3. Never greet more than once or use filler phrases.
+4. Respond clearly and briefly.
+5. Current date/time is: {current_datetime}.
+6. If asked "what is my job experience?", calculate using the starting year in the chat or documents.
+7. If the question is off-topic, respond: "Sorry, I can only answer based on the provided content."
+8. Do not discuss internal model details.
 
-1. Do not hallucinate, infer, or fabricate any information. Only answer using the provided context.
-2. Never greet more than once or repeat niceties. Avoid all filler phrases.
-3. Respond clearly and briefly. Do not say “Based on the provided text,” “According to the context,” or similar.
-4. For general or personal queries like “how are you?”, respond naturally in one short sentence only.
-5. If asked for the current date/time, respond strictly with: {current_datetime} (ISO format: YYYY-MM-DDTHH:MM:SSZ).
-6. If asked questions like "what is my job experience?", extract the starting year from the context and subtract it from the current year derived from {current_datetime}. Return the number of years as the experience.
-7. Detect the user’s language (e.g., Hindi, Hinglish, Gujarati) and reply in that language. Do not mix with English unless the user uses Hinglish.
-8. If the query is off-topic or unrelated to the given context, respond: "Sorry, I can only answer questions based on the provided content."
-9. Do not mention internal processes, model capabilities, or system details. If asked, respond: “Please contact gptbot@ai.”
-
-Stay concise. Use only the context. No extra explanations.
-
-
+Stay concise. Do not repeat or restate questions.
 """
+
     if custom_instructions:
         full_prompt = default_instructions + "\n" + custom_instructions
     else:
@@ -77,7 +84,7 @@ def validate_greeting(user_input):
 
     greetings = ["good morning", "good afternoon", "good evening", "good night"]
     if user_input_lower in greetings or user_input_lower in ["hello", "hi", "hey", "greetings"]:
-        response = f"{correct_greeting.capitalize()}. How can I help you?"
+        response = f"Hey! {correct_greeting.capitalize()}. How can I help you?"
         print("[Greeting Validator] Matched greeting. Responding with:", response)
         return response
     print("[Greeting Validator] No greeting match found.")
@@ -91,22 +98,28 @@ def get_current_datetime():
     return now_str
 
 # --- Unified Chat Model Handler ---
-def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None, max_output_tokens=1024):
+def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None, max_output_tokens=1024, temperature=0.3):
     print(f"[Model Handler] Running chat model: {chat_model}")
     print(f"[Model Handler] max_output_tokens received: {max_output_tokens}")
+
+    # Guard clause for missing chat_model
+    if not chat_model or not isinstance(chat_model, str):
+        raise ValueError("[Model Handler] ❌ 'chat_model' is None or invalid. Please provide a valid model name.")
 
     current_datetime = get_current_datetime()
     history_context = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history])
     prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions, max_output_tokens=max_output_tokens)
 
     try:
-        if "gemini" in chat_model.lower():
+        chat_model_lower = chat_model.lower()
+
+        if "gemini" in chat_model_lower:
             print("[Model Handler] Using Gemini model...")
             model = genai.GenerativeModel("models/gemini-1.5-flash")
             response = model.generate_content(
                 [prompt],
                 generation_config={
-                    "temperature": 0.2,
+                    "temperature": temperature,
                     "max_output_tokens": max_output_tokens
                 },
                 safety_settings={
@@ -119,31 +132,30 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             print("[Gemini Response]", response)
             return response.text
 
-        elif "gpt" in chat_model.lower():
+        elif "gpt" in chat_model_lower:
             print("[Model Handler] Using OpenAI GPT model...")
             messages = [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": question}
+                {"role": "system", "content": prompt}
             ]
             response = openai.ChatCompletion.create(
                 model=chat_model,
                 messages=messages,
-                temperature=0.4,
+                temperature=temperature,
                 max_tokens=max_output_tokens
             )
             print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
             return response["choices"][0]["message"]["content"]
 
-        elif chat_model in ["llama3-8b-8192", "llama3-70b-8192"]:
+        elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
             print("[Model Handler] Using Groq model...")
-            client = Groq(api_key="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")
+            client = Groq(api_key="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")
             response = client.chat.completions.create(
                 model=chat_model,
                 messages=[
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": question}
                 ],
-                temperature=0.4,
+                temperature=temperature,
                 max_tokens=max_output_tokens
             )
             print("[Groq Response]", response.choices[0].message.content)
@@ -152,11 +164,12 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         else:
             print("[Model Handler] Using Together AI model...")
             model = ChatTogether(
-                together_api_key="tgp_v1_8ogC_n1TfSj61WucxNlEKKmue3U2uLjKxlcA6WR-fBM",
+                together_api_key="94d32cd3eedfd9911a6b1c281bc14d278cd0e4f3e52272b3f7cbbed13e698511",
                 model=chat_model
             )
-            output = model.predict(prompt, max_tokens=max_output_tokens)
+            output = model.predict(prompt, max_tokens=max_output_tokens,temperature=temperature)
             print("[Together AI Response]", output)
+            print("Temperature ->>>>>>>>>>>>>>>>>", temperature)
             return output
 
     except Exception as e:
@@ -166,13 +179,14 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             return "This service is temporarily unavailable due to exhausted API usage."
         return f"An error occurred while generating response: {str(e)}"
 
+
     
 # --- FAISS Inference Only ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024):
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024, top_k=3, temperature=0.3):
     print("[FAISS] Performing FAISS search...")
     try:
         query_embedding = embedding_model_global.embed_query(question)
-        k = 3
+        k = top_k
         D, I = index.search(np.array([query_embedding]), k=k)
         print(f"[FAISS] Top {k} indices: {I[0]}")
 
@@ -194,13 +208,30 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
             print(" -", doc[:200], "...")  # Truncate to avoid log flooding
 
         context = "\n\n---\n\n".join(contexts)
-        return run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens)
+        return run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens,temperature=temperature)
     except Exception as e:
         print(f"[FAISS ERROR] {str(e)}")
         return "An error occurred while processing your question."
+    
+# --- Simplified function for Optuna tuning ---
+# def get_response(question, top_k=3, temperature=0.3, max_output_tokens=1024, custom_docs=None):
+#     print("[get_response] Called from Optuna tuning")
+#     if not custom_docs:
+#         return "❌ No documents provided."
+
+#     context = "\n\n---\n\n".join([doc.page_content for doc in custom_docs if hasattr(doc, "page_content")])
+#     return run_chat_model(
+#         chat_model="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", 
+#         context=context,
+#         question=question,
+#         chat_history=[],
+#         custom_instructions=None,
+#         max_output_tokens=max_output_tokens
+#     )
+
 
 # --- Dispatcher (Only FAISS retained) ---
-def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, custom_instructions=None, faiss_index_dir=None, max_output_tokens=1024):
+def inference(vectordb_name, chat_model, question, embedding_model_global, chat_history, custom_instructions=None, faiss_index_dir=None, max_output_tokens=1024, top_k=8, temperature=0.3):
     print(f"[Dispatcher] Routing to {vectordb_name} inference...")
     print(f" - Chat model: {chat_model}")
     print(f" - Question: {question}")
@@ -236,7 +267,7 @@ def inference(vectordb_name, chat_model, question, embedding_model_global, chat_
             return inference_faiss(
                 chat_model, question, embedding_model_global,
                 faiss_store.index, faiss_store.docstore, faiss_store.index_to_docstore_id,
-                chat_history, custom_instructions , max_output_tokens=max_output_tokens
+                chat_history, custom_instructions , max_output_tokens=max_output_tokens,top_k=top_k,temperature=temperature
             )
         else:
             return f"❌ FAISS index file not found at {faiss_index_path}. Please run preprocessing first."
