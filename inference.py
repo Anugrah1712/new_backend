@@ -147,19 +147,37 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             return response["choices"][0]["message"]["content"]
 
         elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
-            print("[Model Handler] Using Groq model...")
-            client = Groq(api_key="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")
-            response = client.chat.completions.create(
-                model=chat_model,
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": question}
-                ],
-                temperature=temperature,
-                max_tokens=max_output_tokens
-            )
-            print("[Groq Response]", response.choices[0].message.content)
-            return response.choices[0].message.content
+            print("[Model Handler] Using Groq model with API key rotation...")
+            groq_keys = [
+                "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",
+                "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",
+                "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",
+                "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"
+            ]
+
+            for key in groq_keys:
+                try:
+                    client = Groq(api_key=key)
+                    response = client.chat.completions.create(
+                        model=chat_model,
+                        messages=[
+                            {"role": "system", "content": prompt},
+                            {"role": "user", "content": question}
+                        ],
+                        temperature=temperature,
+                        max_tokens=max_output_tokens
+                    )
+                    print(f"[Groq Response with key ending {key[-4:]}] {response.choices[0].message.content}")
+                    return response.choices[0].message.content
+                
+                except Exception as e:
+                    print(f"[Groq API Key {key[-4:]} Failed] ➤ {e}")
+                    error_message = str(e).lower()
+                    if not any(k in error_message for k in ["quota", "exceeded", "limit", "invalid api key", "permission", "unauthorized"]):
+                        return f"An error occurred while generating response: {str(e)}"
+
+            return "This service is temporarily unavailable due to exhausted API usage."
+
 
         else:
             print("[Model Handler] Using Together AI model...")
@@ -178,8 +196,6 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         if any(keyword in error_message for keyword in ["quota", "exceeded", "limit", "exhausted", "invalid api key", "permission denied", "unauthorized"]):
             return "This service is temporarily unavailable due to exhausted API usage."
         return f"An error occurred while generating response: {str(e)}"
-
-
     
 # --- FAISS Inference Only ---
 def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024, top_k=3, temperature=0.3):
