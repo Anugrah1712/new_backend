@@ -237,7 +237,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
 
 #     context = "\n\n---\n\n".join([doc.page_content for doc in custom_docs if hasattr(doc, "page_content")])
 #     return run_chat_model(
-#         chat_model="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", 
+#         chat_model="llama3-8b-8192", 
 #         context=context,
 #         question=question,
 #         chat_history=[],
