@@ -8,22 +8,23 @@ from langchain.schema import Document as LangchainDocument
 
 # 🔸 Simple evaluation: check if important keywords are present
 test_cases = [
-    {"question": "What is Kunjesh Parekh's current role and where is he working?", "keywords": ["Head of Data Science", "Bajaj Finance", "Pune"]},
-    {"question": "What are Kunjesh Parekh's areas of expertise?", "keywords": ["Machine Learning", "Deep Learning", "LLMs", "Reinforcement Learning"]},
-    {"question": "Which domains has Kunjesh worked in throughout his career?", "keywords": ["Finance", "Pharmaceutical", "IT", "Manufacturing"]},
-    {"question": "What chatbot project did Kunjesh deploy using Langchain and vector databases?", "keywords": ["RAG", "chatbot", "Langchain", "FAISS", "ChromaDB"]},
-    {"question": "Which cloud platforms and deployment tools does Kunjesh have experience with?", "keywords": ["AWS", "GCP", "Render", "EC2", "Docker"]},
-    {"question": "What contributions has Kunjesh made to Bajaj Finserv's app?", "keywords": ["personalization", "MAU", "DAU", "incremental revenue", "HEART Metrics"]},
-    {"question": "What kind of recommendation systems has Kunjesh built for loans and credit cards?", "keywords": ["Personal Loan", "Credit Card", "decision tree", "CTR"]},
-    {"question": "How has Kunjesh contributed to translation and vernacular processing tasks?", "keywords": ["vernacular translation", "M2M100", "MarianMT", "BLEU score"]},
-    {"question": "What A/B testing framework did Kunjesh establish?", "keywords": ["A/B testing", "statistical significance", "test case design"]},
-    {"question": "What is Kunjesh's teaching and mentoring experience?", "keywords": ["trainer", "upGrad", "Dale Carnegie", "data science course", "IMS Proschool"]},
-    {"question": "Which companies has Kunjesh worked at previously?", "keywords": ["Merck", "Cognizant", "Jubilant Life Sciences"]},
-    {"question": "What image processing projects has Kunjesh worked on?", "keywords": ["tumor prediction", "CNN", "deep learning", "tensorflow", "image processing"]},
-    {"question": "What competitions and accolades has Kunjesh achieved in data science?", "keywords": ["top 10%", "GE Analytics", "Kaggle", "Techgig", "Analytics Vidhya"]},
-    {"question": "What programming and data tools is Kunjesh proficient in?", "keywords": ["Python", "R", "Pyspark", "SQL", "Databricks"]},
-    {"question": "What academic qualifications does Kunjesh hold?", "keywords": ["PhD", "IIT Jodhpur", "MBA", "IIT Roorkee", "B.Tech", "Nirma University"]}
+    {"question": "What is GTSBOT and which architecture is it based on?", "keywords": ["GTSBOT", "Retrieval-Augmented Generation", "contextual assistant"]},
+    {"question": "Which input formats and sources does GTSBOT support for analysis?", "keywords": ["PDF", "Word", "URLs", "multimodal input"]},
+    {"question": "What vector databases are compatible with GTSBOT?", "keywords": ["Chroma", "FAISS", "Qdrant", "Pinecone", "Weaviate"]},
+    {"question": "How does GTSBOT ensure context-aware responses?", "keywords": ["semantic search", "retrieved context", "language model", "prompt"]},
+    {"question": "Which large language models are supported by GTSBOT?", "keywords": ["GPT-4", "Llama-3.3-70B", "Meta-Llama-3.1", "Gemini 1.5 Flash"]},
+    {"question": "What functionalities does the GTSBOT Developer Console provide?", "keywords": ["prompt customization", "model selection", "vector indexing", "system configuration"]},
+    {"question": "How does GTSBOT handle security and privacy for enterprise deployment?", "keywords": ["self-hosted", "Docker", "AES encryption", "no data logging"]},
+    {"question": "What features make GTSBOT suitable for customer support use cases?", "keywords": ["technical manuals", "warranty documents", "first-level support", "automated responses"]},
+    {"question": "What are the key use cases where GTSBOT adds value?", "keywords": ["Legal", "Education", "Enterprise", "Customer Support", "Consulting"]},
+    {"question": "What are some of the common troubleshooting scenarios with GTSBOT?", "keywords": ["API key", "chunking failure", "vector indexing error", "Admin key"]},
+    {"question": "What capabilities does GTSBOT offer for multilingual and voice-based interaction?", "keywords": ["speech input", "text-to-speech", "multilingual support"]},
+    {"question": "What does the GTSBOT Pro plan include?", "keywords": ["$999", "unlimited uploads", "priority support", "real-time model switching"]},
+    {"question": "How does prompt engineering affect GTSBOT's behavior?", "keywords": ["system prompt", "custom instructions", "domain-specific", "structured prompts"]},
+    {"question": "How does GTSBOT process and retrieve content from uploaded documents?", "keywords": ["chunking", "embedding", "semantic retrieval", "FastAPI"]},
+    {"question": "What deployment options and environments are supported by GTSBOT?", "keywords": ["cloud", "on-premise", "Docker", "air-gapped"]}
 ]
+
 
 def evaluate_answer(answer, expected_keywords):
     return sum(k.lower() in answer.lower() for k in expected_keywords) / len(expected_keywords)
@@ -35,7 +36,7 @@ def objective(trial):
     temperature = trial.suggest_float("temperature", 0.2, 0.7)
     max_tokens = trial.suggest_int("max_output_tokens", 512, 1024, step=128)
 
-    pdf_files = glob.glob("Kunjesh_Parekh_202505.pdf")
+    pdf_files = glob.glob("Datalysis Documentaion.pdf")
 
     async def run_preprocessing():
         return await preprocess_text(
