@@ -8,6 +8,7 @@ from datetime import datetime
 from langchain_together import ChatTogether
 from dotenv import load_dotenv
 from groq import Groq
+import random
 
 load_dotenv()
 
@@ -154,15 +155,18 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             return response["choices"][0]["message"]["content"]
 
         elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
-            print("[Model Handler] Using Groq model with API key rotation...")
+            print("[Model Handler] Using Groq model with randomized API key rotation...")
             groq_keys = [
                 "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",
-                "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",
-                "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",
-                "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",
+                "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",
+                "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",
+                "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",
                 "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",
                 "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"
             ]
+
+            # Shuffle keys before trying
+            random.shuffle(groq_keys)
 
             for key in groq_keys:
                 try:

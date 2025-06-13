@@ -8,23 +8,22 @@ from langchain.schema import Document as LangchainDocument
 
 # 🔸 Simple evaluation: check if important keywords are present
 test_cases = [
-    {"question": "What is GTSBOT and which architecture is it based on?", "keywords": ["GTSBOT", "Retrieval-Augmented Generation", "contextual assistant"]},
-    {"question": "Which input formats and sources does GTSBOT support for analysis?", "keywords": ["PDF", "Word", "URLs", "multimodal input"]},
-    {"question": "What vector databases are compatible with GTSBOT?", "keywords": ["Chroma", "FAISS", "Qdrant", "Pinecone", "Weaviate"]},
-    {"question": "How does GTSBOT ensure context-aware responses?", "keywords": ["semantic search", "retrieved context", "language model", "prompt"]},
-    {"question": "Which large language models are supported by GTSBOT?", "keywords": ["GPT-4", "Llama-3.3-70B", "Meta-Llama-3.1", "Gemini 1.5 Flash"]},
-    {"question": "What functionalities does the GTSBOT Developer Console provide?", "keywords": ["prompt customization", "model selection", "vector indexing", "system configuration"]},
-    {"question": "How does GTSBOT handle security and privacy for enterprise deployment?", "keywords": ["self-hosted", "Docker", "AES encryption", "no data logging"]},
-    {"question": "What features make GTSBOT suitable for customer support use cases?", "keywords": ["technical manuals", "warranty documents", "first-level support", "automated responses"]},
-    {"question": "What are the key use cases where GTSBOT adds value?", "keywords": ["Legal", "Education", "Enterprise", "Customer Support", "Consulting"]},
-    {"question": "What are some of the common troubleshooting scenarios with GTSBOT?", "keywords": ["API key", "chunking failure", "vector indexing error", "Admin key"]},
-    {"question": "What capabilities does GTSBOT offer for multilingual and voice-based interaction?", "keywords": ["speech input", "text-to-speech", "multilingual support"]},
-    {"question": "What does the GTSBOT Pro plan include?", "keywords": ["$999", "unlimited uploads", "priority support", "real-time model switching"]},
-    {"question": "How does prompt engineering affect GTSBOT's behavior?", "keywords": ["system prompt", "custom instructions", "domain-specific", "structured prompts"]},
-    {"question": "How does GTSBOT process and retrieve content from uploaded documents?", "keywords": ["chunking", "embedding", "semantic retrieval", "FastAPI"]},
-    {"question": "What deployment options and environments are supported by GTSBOT?", "keywords": ["cloud", "on-premise", "Docker", "air-gapped"]}
+    {"question": "What is the full name and core focus of Rahi Technologies?", "keywords": ["Rahi Platform Technologies", "SaaS", "financial services"]},
+    {"question": "Where is Rahi Technologies located?", "keywords": ["4010", "Ganga Trueno", "Airport Road", "Pune", "411014"]},
+    {"question": "What is Rahi Technologies’ vision for its clients?", "keywords": ["cloud-native", "omni-channel", "legacy financial systems", "customer lifecycle"]},
+    {"question": "What architecture principles does the Rahi platform follow?", "keywords": ["microservices", "DevOps", "API-first", "multi-tenant", "polyglot persistence"]},
+    {"question": "Which cloud platforms does Rahi’s platform support?", "keywords": ["AWS", "Azure", "GCP", "multi-cloud"]},
+    {"question": "Who founded Rahi Technologies and what is his background?", "keywords": ["Rakesh Bhatt", "30 years", "financial services", "technology"]},
+    {"question": "Who is the CTO of Rahi and what is his experience?", "keywords": ["Vivek Kant", "25 years", "digital architecture", "APIs", "cloud infrastructure"]},
+    {"question": "Which key leaders contribute to Rahi’s technology and engineering strategy?", "keywords": ["Sagar Pandkar", "Imroz Khan", "Bhavesh Mehta", "Rajib Bhowmick"]},
+    {"question": "What values define the work culture at Rahi Technologies?", "keywords": ["ambition", "ownership", "execution rigor", "transparency", "impact"]},
+    {"question": "What open positions are available at Rahi Technologies?", "keywords": ["Senior Software Engineer", "DevOps", "Solution Architect", "SDET"]},
+    {"question": "Which DevOps practices are emphasized at Rahi Technologies?", "keywords": ["CI/CD", "Docker", "Kubernetes", "Terraform", "Ansible"]},
+    {"question": "What monitoring and security tools does Rahi use?", "keywords": ["Grafana", "ELK", "Nagios", "compliance", "DPDP", "DLG"]},
+    {"question": "What type of content does Rahi publish in its Knowledge section?", "keywords": ["SaaS platform", "Agile SDLC", "API gateways", "real-time observability"]},
+    {"question": "How can someone get in touch with Rahi Technologies?", "keywords": ["contact page", "form", "name", "email", "phone", "subject", "message"]},
+    {"question": "How did Rahi Technologies get its name?", "keywords": ["Rakesh Bhatt", "RA", "HI", "traveler", "digital transformation"]}
 ]
-
 
 def evaluate_answer(answer, expected_keywords):
     return sum(k.lower() in answer.lower() for k in expected_keywords) / len(expected_keywords)
@@ -36,7 +35,7 @@ def objective(trial):
     temperature = trial.suggest_float("temperature", 0.2, 0.7)
     max_tokens = trial.suggest_int("max_output_tokens", 512, 1024, step=128)
 
-    pdf_files = glob.glob("Datalysis Documentaion.pdf")
+    pdf_files = glob.glob("Documentation_Rahi.pdf")
 
     async def run_preprocessing():
         return await preprocess_text(
