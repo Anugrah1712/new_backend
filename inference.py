@@ -149,10 +149,12 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
             print("[Model Handler] Using Groq model with API key rotation...")
             groq_keys = [
-                "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",
+                "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",
                 "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",
                 "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",
-                "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"
+                "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",
+                "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",
+                "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"
             ]
 
             for key in groq_keys:
@@ -230,20 +232,20 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         return "An error occurred while processing your question."
     
 # --- Simplified function for Optuna tuning ---
-# def get_response(question, top_k=3, temperature=0.3, max_output_tokens=1024, custom_docs=None):
-#     print("[get_response] Called from Optuna tuning")
-#     if not custom_docs:
-#         return "❌ No documents provided."
+def get_response(question, top_k=3, temperature=0.3, max_output_tokens=1024, custom_docs=None):
+    print("[get_response] Called from Optuna tuning")
+    if not custom_docs:
+        return "❌ No documents provided."
 
-#     context = "\n\n---\n\n".join([doc.page_content for doc in custom_docs if hasattr(doc, "page_content")])
-#     return run_chat_model(
-#         chat_model="llama3-8b-8192", 
-#         context=context,
-#         question=question,
-#         chat_history=[],
-#         custom_instructions=None,
-#         max_output_tokens=max_output_tokens
-#     )
+    context = "\n\n---\n\n".join([doc.page_content for doc in custom_docs if hasattr(doc, "page_content")])
+    return run_chat_model(
+        chat_model="llama3-8b-8192", 
+        context=context,
+        question=question,
+        chat_history=[],
+        custom_instructions=None,
+        max_output_tokens=max_output_tokens
+    )
 
 
 # --- Dispatcher (Only FAISS retained) ---

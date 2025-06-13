@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from io import BytesIO
 import os
 import faiss
+from typing import Union
 import pickle
 import numpy as np
 from langchain_community.embeddings import SentenceTransformerEmbeddings
@@ -24,27 +25,38 @@ sys.modules["sqlite3"] = sqlite3
 load_dotenv()
 
 # Preprocess uploaded files + scraped data into text chunks
-async def preprocess_text(files: list[UploadFile], size, overlap ,scraped_data): #scraped_data
-    import time
-    
+async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, scraped_data=None):
     paragraphs = []
-    from io import BytesIO
-    # Step 1: Process each file
+
     for file in files:
-        if file.filename.endswith(".pdf"):
+        # Handle FastAPI UploadFile
+        if hasattr(file, "filename") and hasattr(file, "read"):
+            filename = file.filename
             contents = await file.read()
             file_object = BytesIO(contents)
+
+        # Handle file path as str
+        elif isinstance(file, str):
+            filename = os.path.basename(file)
+            with open(file, "rb") as f:
+                contents = f.read()
+            file_object = BytesIO(contents)
+
+        else:
+            continue  # Invalid file format
+
+        # PDF handling
+        if filename.endswith(".pdf"):
             reader = PdfReader(file_object)
-            for i, page in enumerate(reader.pages):
+            for page in reader.pages:
                 page_text = page.extract_text()
                 if page_text:
                     cleaned_text = ' '.join(page_text.split())
                     paragraphs.append(cleaned_text)
-        elif file.filename.endswith(".docx"):
-            
-            file_content = await file.read() 
-            docx_stream = BytesIO(file_content) 
-            docx = DocxDocument(docx_stream)
+
+        # DOCX handling
+        elif filename.endswith(".docx"):
+            docx = DocxDocument(file_object)
             full_text = ""
             for para in docx.paragraphs:
                 if para.text.strip():
