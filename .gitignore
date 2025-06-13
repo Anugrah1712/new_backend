@@ -20,3 +20,4 @@ faiss_index/
 *.lock
 
 raw_structured_dumps/
+*.pdf
