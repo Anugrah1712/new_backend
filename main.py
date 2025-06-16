@@ -28,7 +28,8 @@ origins = [
     "https://www.genaitechsol.com",
     "https://anugrah-web.vercel.app",
     "https://kunjeshweb.vercel.app",
-    "https://demo-rahi.vercel.app"
+    "https://demo-rahi.vercel.app",
+    "https://luckpay.vercel.app"
 ]
 
 app.add_middleware(
