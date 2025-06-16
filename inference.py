@@ -157,12 +157,12 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
             print("[Model Handler] Using Groq model with randomized API key rotation...")
             groq_keys = [
-                "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",
-                "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",
-                "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",
-                "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",
-                "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",
-                "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"
+                "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",
+                "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",
+                "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",
+                "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",
+                "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",
+                "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" #out
             ]
 
             # Shuffle keys before trying
