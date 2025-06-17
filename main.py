@@ -13,23 +13,24 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
 # Allow frontend CORS origins
 origins = [
-    "https://rag-chatbot-frontend-three.vercel.app",
-    "http://13.60.34.232:8000",
-    "https://rag-chatbot-web.shop",
-    "http://rag-chatbot-web.shop",
-    "http://localhost:3000",
-    "https://datalysis-website.vercel.app",
-    "https://datalysis.rag-chatbot-web.shop",
-    "https://www.genaitechsol.com",
-    "https://anugrah-web.vercel.app",
-    "https://kunjeshweb.vercel.app",
-    "https://demo-rahi.vercel.app",
-    "https://luckpay.vercel.app"
+    os.getenv("AWS_IP"),
+    os.getenv("DOMAIN1"),
+    os.getenv("DOMAIN2"),
+    os.getenv("LOCAL"),
+    os.getenv("DATALYSIS"),
+    os.getenv("GENAITECHSOL"),
+    os.getenv("KUNJWEB"),
+    os.getenv("RAHI"),
+    os.getenv("LUCKPAY"),
+    os.getenv("ANUWEB")
 ]
 
 app.add_middleware(

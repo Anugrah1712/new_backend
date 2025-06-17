@@ -5,9 +5,12 @@ import asyncio
 from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright
 import google.generativeai as genai
+from dotenv import load_dotenv
 
+load_dotenv()
 # Gemini setup
-genai.configure(api_key="AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # Cache file

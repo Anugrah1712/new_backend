@@ -12,9 +12,13 @@ import random
 
 load_dotenv()
 
-# --- API Configuration ---
-genai.configure(api_key=("AIzaSyD364sF7FOZgaW4ktkIcITe_7miCqjhs4k"))
-openai.api_key = ("OPENAI_API_KEY")
+# Get API key from environment
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Configure Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+openai.api_key = (OPENAI_API_KEY)
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None, max_output_tokens=None):
@@ -157,14 +161,13 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
             print("[Model Handler] Using Groq model with randomized API key rotation...")
             groq_keys = [
-                "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",
-                "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",
-                "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",
-                "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",
-                "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",
-                "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" #out
+                os.getenv("GROQ1"),
+                os.getenv("GROQ2"),
+                os.getenv("GROQ3"),
+                os.getenv("GROQ4"),
+                os.getenv("GROQ5"),
+                os.getenv("GROQ6"),
             ]
-
             # Shuffle keys before trying
             random.shuffle(groq_keys)
 

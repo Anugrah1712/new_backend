@@ -31,3 +31,4 @@ transformers
 accelerate
 huggingface_hub
 groq
+python-dotenv
