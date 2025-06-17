@@ -14,7 +14,7 @@ faiss_index/
 
 
 # Ignore virtual environment
-.env/
+
 
 # Ignore dependency logs
 *.lock
