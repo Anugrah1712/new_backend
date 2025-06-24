@@ -22,3 +22,4 @@ faiss_index/
 raw_structured_dumps/
 *.pdf
 .env
+.env
