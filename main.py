@@ -285,12 +285,24 @@ class ChatRequest(BaseModel):
     query: str
     project_name: str
 
+from fastapi import FastAPI, Request, HTTPException
+from langdetect import detect
+
 @app.post("/chat")
 async def chat_with_bot(payload: ChatRequest, request: Request):
     print("\n💬 [CHAT] ➤ New chat query received.")
     prompt = payload.query
     domain = payload.project_name
     print(f"🧾 [CHAT] ➤ Domain: {domain}, Prompt: {prompt}")
+
+    # 🌐 Detect language (keep only 'en' or 'hi')
+    try:
+        detected_lang = detect(prompt)
+        if detected_lang not in ['en', 'hi']:
+            detected_lang = 'en'
+    except Exception:
+        print("⚠️ [LANGUAGE] ➤ Language detection failed. Defaulting to English.")
+        detected_lang = 'en'
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
@@ -315,8 +327,6 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     top_k = loaded_session.get("top_k", 8)
     temperature = loaded_session.get("temperature", 0.3)
 
-
-    # ✅ REBUILD and USE the FAISS retriever
     faiss_index_dir = os.path.join(domain_folder, "faiss_index")
     retriever = await rebuild_faiss_retriever(faiss_index_dir)
     print("📦 [CHAT] ➤ Retriever rebuilt.")
@@ -325,7 +335,6 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print("❌ [CHAT] ➤ Retriever not found.")
         raise HTTPException(status_code=500, detail="Retriever not available. Please preprocess data again.")
 
-    # ✅ Debug: test retrieval BEFORE inference
     try:
         docs = retriever.get_relevant_documents(prompt)
         print(f"🔍 [DEBUG] ➤ Retrieved {len(docs)} documents for query.")
@@ -335,10 +344,8 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     except Exception as e:
         print(f"❌ [DEBUG] ➤ Document retrieval failed: {e}")
 
-    # Append user message
     messages.append({"role": "user", "content": prompt})
 
-    # 🔄 Inference call
     try:
         print("🧠 [INFERENCE] ➤ Calling inference engine...")
         response = inference(
@@ -355,7 +362,12 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         )
         print("✅ [INFERENCE] ➤ Response generated.")
         messages.append({"role": "assistant", "content": response})
-        return {"response": response}
+
+        return {
+            "response": response,
+            "language": detected_lang
+        }
+
     except Exception as e:
         print(f"❌ [INFERENCE] ➤ Inference error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")

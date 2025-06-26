@@ -34,7 +34,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && apt-get clean
 
-# Set work directory
+# Set working directory
 WORKDIR /app
 
 # Copy requirements
@@ -50,11 +50,17 @@ RUN pip install playwright && playwright install --with-deps
 # Install Scrapy and Scrapy-Splash
 RUN pip install scrapy scrapy-splash
 
-# Copy your project code
+# Install FastText separately (not in requirements.txt due to compilation)
+RUN pip install fasttext
+
+# Download FastText language model (lid.176.ftz)
+RUN wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz
+
+# Copy your project files
 COPY . .
 
 # Expose port for FastAPI
 EXPOSE 8000
 
-# Default command
+# Run FastAPI app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

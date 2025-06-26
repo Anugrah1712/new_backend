@@ -33,3 +33,6 @@ huggingface_hub
 groq
 python-dotenv
 fastapi
+langdetect
+httpx==0.28.1
+deep-translator
