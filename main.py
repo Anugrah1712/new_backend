@@ -21,7 +21,7 @@ load_dotenv()
 
 app = FastAPI()
 
-client = MongoClient(os.getenv("MONGO_URI"))
+client = MongoClient(os.getenv("MONGO_URI"), tls=True, serverSelectionTimeoutMS=30000)
 db = client["RagChatbotData"]
 logs_collection = db["user_logs"]
 
