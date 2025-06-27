@@ -14,10 +14,16 @@ from pydantic import BaseModel
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from dotenv import load_dotenv
+from pymongo import MongoClient
+from datetime import datetime
 
 load_dotenv()
 
 app = FastAPI()
+
+client = MongoClient(os.getenv("MONGO_URI"))
+db = client["RagChatbotData"]
+logs_collection = db["user_logs"]
 
 # Allow frontend CORS origins
 origins = [
@@ -287,6 +293,7 @@ class ChatRequest(BaseModel):
 
 from fastapi import FastAPI, Request, HTTPException
 from langdetect import detect
+from datetime import datetime
 
 @app.post("/chat")
 async def chat_with_bot(payload: ChatRequest, request: Request):
@@ -295,7 +302,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     domain = payload.project_name
     print(f"🧾 [CHAT] ➤ Domain: {domain}, Prompt: {prompt}")
 
-    # 🌐 Detect language (keep only 'en' or 'hi')
+    # 🌐 Detect language
     try:
         detected_lang = detect(prompt)
         if detected_lang not in ['en', 'hi']:
@@ -303,6 +310,19 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     except Exception:
         print("⚠️ [LANGUAGE] ➤ Language detection failed. Defaulting to English.")
         detected_lang = 'en'
+
+    # ✅ Store chat log in MongoDB
+    try:
+        user_ip = request.client.host
+        logs_collection.insert_one({
+            "ip": user_ip,
+            "domain_or_project_name": domain,
+            "question": prompt,
+            "timestamp": datetime.utcnow()
+        })
+        print("🗃️ [MONGO] ➤ Chat log inserted.")
+    except Exception as e:
+        print(f"⚠️ [MONGO] ➤ Failed to log to MongoDB: {e}")
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
