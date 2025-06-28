@@ -28,6 +28,7 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS chatlog (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT,
+    answer TEXT,
     ip TEXT,
     project_name TEXT,
     timestamp TEXT
@@ -321,18 +322,6 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print("⚠️ [LANGUAGE] ➤ Language detection failed. Defaulting to English.")
         detected_lang = 'en'
 
-    # ✅ Log to SQLite
-    try:
-        user_ip = request.client.host
-        cursor.execute('''
-            INSERT INTO chatlog (question, ip, project_name, timestamp)
-            VALUES (?, ?, ?, ?)
-        ''', (prompt, user_ip, domain, datetime.utcnow().isoformat()))
-        conn.commit()
-        print("🗃️ [SQLITE] ➤ Chat log inserted.")
-    except Exception as e:
-        print(f"⚠️ [SQLITE] ➤ Failed to log chat: {e}")
-
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
 
@@ -391,6 +380,18 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         )
         print("✅ [INFERENCE] ➤ Response generated.")
         messages.append({"role": "assistant", "content": response})
+
+        # ✅ Log question + answer to SQLite
+        try:
+            user_ip = request.client.host
+            cursor.execute('''
+                INSERT INTO chatlog (question, ip, project_name, timestamp)
+                VALUES (?, ?, ?, ?)
+            ''', (f"Q: {prompt} | A: {response}", user_ip, domain, datetime.utcnow().isoformat()))
+            conn.commit()
+            print("🗃️ [SQLITE] ➤ Chat log (with answer) inserted.")
+        except Exception as e:
+            print(f"⚠️ [SQLITE] ➤ Failed to log chat: {e}")
 
         return {
             "response": response,
