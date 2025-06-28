@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from dotenv import load_dotenv
-from pymongo import MongoClient
 from datetime import datetime
 import sqlite3
 
