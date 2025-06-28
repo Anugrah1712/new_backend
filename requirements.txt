@@ -36,4 +36,5 @@ fastapi
 langdetect
 httpx==0.28.1
 deep-translator
-pymongo[srv]
+pymongo[srv]>=4.3
+

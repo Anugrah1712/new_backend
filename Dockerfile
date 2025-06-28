@@ -61,6 +61,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Install Playwright and browsers
 RUN pip3 install playwright && playwright install --with-deps
 
+
 # Install Scrapy and Scrapy-Splash
 RUN pip3 install scrapy scrapy-splash
 
