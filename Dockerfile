@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies (including SSL, DNS, and certificate tools)
+# Install system dependencies (including OpenSSL, certificates, scraping support)
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -35,7 +35,8 @@ RUN apt-get update && apt-get install -y \
     apt-transport-https \
     gnupg \
     tzdata \
-    && apt-get clean
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
@@ -43,7 +44,7 @@ WORKDIR /app
 # Copy Python requirements
 COPY requirements.txt .
 
-# Upgrade pip and install Python dependencies
+# Upgrade pip and install dependencies
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -53,17 +54,15 @@ RUN pip install playwright && playwright install --with-deps
 # Install Scrapy and Scrapy-Splash
 RUN pip install scrapy scrapy-splash
 
-# Install FastText (separately due to compilation)
+# Install FastText and download its language model
 RUN pip install fasttext
-
-# Download FastText language model
 RUN wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz
 
-# Copy project files into the container
+# Copy all app files into the container
 COPY . .
 
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run the FastAPI application
+# Run FastAPI app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
