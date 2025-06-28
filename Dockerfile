@@ -61,13 +61,18 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Install Playwright and browsers
 RUN pip3 install playwright && playwright install --with-deps
 
-
 # Install Scrapy and Scrapy-Splash
 RUN pip3 install scrapy scrapy-splash
 
 # Install FastText and download its model
 RUN pip3 install fasttext
 RUN wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz
+
+# Create directory for SQLite DB persistence
+RUN mkdir -p /data
+
+# Declare volume for SQLite DB file persistence
+VOLUME /data
 
 # Copy project files into the container
 COPY . .

@@ -16,14 +16,25 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from datetime import datetime
+import sqlite3
 
 load_dotenv()
 
 app = FastAPI()
 
-client = MongoClient(os.getenv("MONGO_URI"), tls=True, serverSelectionTimeoutMS=30000)
-db = client["RagChatbotData"]
-logs_collection = db["user_logs"]
+# Initialize SQLite DB
+conn = sqlite3.connect('/data/chatlog.db', check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS chatlog (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question TEXT,
+    ip TEXT,
+    project_name TEXT,
+    timestamp TEXT
+)
+''')
+conn.commit()
 
 # Allow frontend CORS origins
 origins = [
@@ -311,18 +322,17 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print("⚠️ [LANGUAGE] ➤ Language detection failed. Defaulting to English.")
         detected_lang = 'en'
 
-    # ✅ Store chat log in MongoDB
+    # ✅ Log to SQLite
     try:
         user_ip = request.client.host
-        logs_collection.insert_one({
-            "ip": user_ip,
-            "domain_or_project_name": domain,
-            "question": prompt,
-            "timestamp": datetime.utcnow()
-        })
-        print("🗃️ [MONGO] ➤ Chat log inserted.")
+        cursor.execute('''
+            INSERT INTO chatlog (question, ip, project_name, timestamp)
+            VALUES (?, ?, ?, ?)
+        ''', (prompt, user_ip, domain, datetime.utcnow().isoformat()))
+        conn.commit()
+        print("🗃️ [SQLITE] ➤ Chat log inserted.")
     except Exception as e:
-        print(f"⚠️ [MONGO] ➤ Failed to log to MongoDB: {e}")
+        print(f"⚠️ [SQLITE] ➤ Failed to log chat: {e}")
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
