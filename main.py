@@ -47,7 +47,8 @@ origins = [
     os.getenv("KUNJWEB"),
     os.getenv("RAHI"),
     os.getenv("LUCKPAY"),
-    os.getenv("ANUWEB")
+    os.getenv("ANUWEB"),
+    os.getenv("BAJAJ")
 ]
 
 app.add_middleware(
