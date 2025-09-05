@@ -22,19 +22,19 @@ load_dotenv()
 app = FastAPI()
 
 # Initialize SQLite DB
-conn = sqlite3.connect('/data/chatlog.db', check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS chatlog (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question TEXT,
-    answer TEXT,
-    ip TEXT,
-    project_name TEXT,
-    timestamp TEXT
-)
-''')
-conn.commit()
+# conn = sqlite3.connect('/data/chatlog.db', check_same_thread=False)
+# cursor = conn.cursor()
+# cursor.execute('''
+# CREATE TABLE IF NOT EXISTS chatlog (
+#     id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     question TEXT,
+#     answer TEXT,
+#     ip TEXT,
+#     project_name TEXT,
+#     timestamp TEXT
+# )
+# ''')
+# conn.commit()
 
 # Allow frontend CORS origins
 origins = [
@@ -322,6 +322,8 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     except Exception:
         print("⚠️ [LANGUAGE] ➤ Language detection failed. Defaulting to English.")
         detected_lang = 'en'
+
+    print(f"🌐 [LANGUAGE] ➤ Detected language: {detected_lang}")
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")

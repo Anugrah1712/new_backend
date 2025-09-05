@@ -130,7 +130,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
 
         if "gemini" in chat_model_lower:
             print("[Model Handler] Using Gemini model...")
-            model = genai.GenerativeModel("models/gemini-1.5-flash")
+            model = genai.GenerativeModel("models/gemini-2.5-flash")
             response = model.generate_content(
                 [prompt],
                 generation_config={
@@ -161,7 +161,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
             return response["choices"][0]["message"]["content"]
 
-        elif chat_model_lower in ["llama3-8b-8192", "llama3-70b-8192"]:
+        elif chat_model_lower in ["llama-3.3-70b-versatile"]:
             print("[Model Handler] Using Groq model with randomized API key rotation...")
             groq_keys = [
                 os.getenv("GROQ1"),
