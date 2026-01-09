@@ -3,21 +3,21 @@
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document as LangchainDocument
+from langchain_core.documents import Document as LangchainDocument
 from fastapi import UploadFile
 from dotenv import load_dotenv
 from io import BytesIO
 import os
-import faiss
-from typing import Union
 import pickle
 import numpy as np
+from typing import Union
+import sys
+import sqlite3
+
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
-import sys
-import sqlite3
-from langchain_community.vectorstores import FAISS
+
 
 # Fix for FAISS SQLite dependency in some environments
 sys.modules["sqlite3"] = sqlite3
