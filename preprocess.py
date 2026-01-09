@@ -2,7 +2,7 @@
 
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document as LangchainDocument
 from fastapi import UploadFile
 from dotenv import load_dotenv
