@@ -1,8 +1,9 @@
 chromadb
-langchain
+langchain==0.1.20
+langchain-core==0.1.53
 tiktoken
-langchain-community
-langchain_together
+langchain-community==0.0.38
+langchain-together==0.0.3
 sentence-transformers
 boto3
 requests
@@ -27,7 +28,6 @@ scrapy
 scrapy-splash
 openai
 tldextract
-transformers 
 accelerate
 huggingface_hub
 groq
@@ -36,4 +36,4 @@ fastapi
 langdetect
 httpx==0.28.1
 deep-translator
-langchain-text-splitters
+langchain-text-splitters==0.0.1
