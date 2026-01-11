@@ -3,7 +3,7 @@ langchain==0.1.20
 langchain-core==0.1.53
 tiktoken
 langchain-community==0.0.38
-langchain-together==0.0.3
+langchain-together==0.1.5
 sentence-transformers
 boto3
 requests
