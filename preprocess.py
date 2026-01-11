@@ -13,7 +13,7 @@ import numpy as np
 from typing import Union
 import sys
 import sqlite3
-
+import faiss
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
