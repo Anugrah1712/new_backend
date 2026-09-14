@@ -172,20 +172,47 @@ async def preprocess(
         os.makedirs(domain_folder, exist_ok=True)
         print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
 
-        # ✅ Scrape web data if links provided
+                # ✅ Scrape web data if links provided — but reuse existing scraped
+        # data for this project if it was already scraped for these exact
+        # links, instead of re-crawling every time. Avoids hammering
+        # already-sensitive sites (bot protection, rate limits) on repeat
+        # requests for the same project+URLs.
         scraped_data = []
         if links_list:
-            try:
-                print("🕸️ [SCRAPER] ➤ Starting web scraping...")
-                for link in links_list:
-                    scraped_data.extend(await scrape_web_data(link))
-                    print(f"✅ [SCRAPER] ➤ Scraped content from: {link}")
-                with open(os.path.join(domain_folder, "scraped_cache.pkl"), "wb") as f:
-                    pickle.dump(scraped_data, f)
-                print(f"💾 [SCRAPER] ➤ Scraped data cached at: {domain_folder}")
-            except Exception as e:
-                print(f"❌ [SCRAPER] ➤ Web scraping failed: {str(e)}")
-                raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
+            cache_path = os.path.join(domain_folder, "scraped_cache.pkl")
+            meta_path = os.path.join(domain_folder, "scrape_meta.json")
+            sorted_links = sorted(links_list)
+
+            reused_cache = False
+            if os.path.exists(cache_path) and os.path.exists(meta_path):
+                try:
+                    with open(meta_path, "r") as f:
+                        meta = json.load(f)
+                    if meta.get("links") == sorted_links:
+                        with open(cache_path, "rb") as f:
+                            scraped_data = pickle.load(f)
+                        reused_cache = True
+                        print(f"♻️  [SCRAPER] ➤ Reusing existing scraped data for "
+                              f"'{domain}' — same links already scraped "
+                              f"({len(scraped_data)} pages cached).")
+                except Exception as e:
+                    print(f"⚠️ [SCRAPER] ➤ Couldn't read existing cache/meta, "
+                          f"will re-scrape: {e}")
+
+            if not reused_cache:
+                try:
+                    print("🕸️ [SCRAPER] ➤ Starting web scraping...")
+                    for link in links_list:
+                        scraped_data.extend(await scrape_web_data(link))
+                        print(f"✅ [SCRAPER] ➤ Scraped content from: {link}")
+                    with open(cache_path, "wb") as f:
+                        pickle.dump(scraped_data, f)
+                    with open(meta_path, "w") as f:
+                        json.dump({"links": sorted_links}, f)
+                    print(f"💾 [SCRAPER] ➤ Scraped data cached at: {domain_folder}")
+                except Exception as e:
+                    print(f"❌ [SCRAPER] ➤ Web scraping failed: {str(e)}")
+                    raise HTTPException(status_code=500, detail=f"Web scraping failed: {str(e)}")
 
         # ✅ Proceed to vector DB preprocessing
         print("🧠 [VECTORDB] ➤ Calling preprocess_vectordbs...")

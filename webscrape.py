@@ -31,7 +31,7 @@ REQUEST_TIMEOUT = 20  # seconds
 # User-Agent header — plain `requests`/urllib3 has a fingerprint that gets
 # flagged even with a browser User-Agent set. curl_cffi reproduces a real
 # Chrome handshake, which is why this clears the 403 that `requests` hit.
-IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome124")
+IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome119")
 
 # Fallback budget used only when a site has no discoverable sitemap at all
 # (in which case we fall back to pure link-crawling from the homepage).

@@ -1,9 +1,14 @@
 import asyncio
+import os
 from curl_cffi import requests as curl_requests
 from lxml import etree
 from urllib.parse import urljoin
 
-IMPERSONATE_PROFILE = "chrome124"
+# Same env var webscrape.py reads, so both files stay in sync on which
+# browser fingerprint curl_cffi impersonates. Default matches whatever
+# profile currently clears au.bank.in's Cloudflare check (chrome119 as
+# of the last test — chrome124/131/120 were blocked).
+IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome119")
 REQUEST_TIMEOUT = 20
 
 # Common sitemap locations to try, in order, before giving up
@@ -43,7 +48,6 @@ def _parse_sitemap_xml(xml_bytes):
     loc_path = ".//sm:loc" if ns else ".//loc"
 
     locs = [el.text.strip() for el in root.findall(loc_path, ns) if el.text]
-
     if tag == "sitemapindex":
         return "index", locs
     return "urlset", locs
