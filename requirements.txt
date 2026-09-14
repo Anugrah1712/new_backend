@@ -36,3 +36,4 @@ langchain-core==0.2.43
 langchain-community==0.2.16
 langchain-together==0.1.5
 langchain-text-splitters==0.2.4
+curl_cffi

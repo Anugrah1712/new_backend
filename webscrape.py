@@ -2,11 +2,13 @@ import hashlib
 import os
 import pickle
 import asyncio
-import requests
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+from sitemap import discover_all_urls  # sitemap crawler from earlier
 
 load_dotenv()
 # Gemini setup
@@ -22,25 +24,31 @@ if os.path.exists(CACHE_PATH):
 else:
     scraped_cache = {}
 
-# Plain requests.get() with no headers gets blocked/served different content by
-# many sites (bot detection, CDNs). A normal browser User-Agent avoids most of that.
-REQUEST_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    )
-}
 REQUEST_TIMEOUT = 20  # seconds
 
-# Hard cap on how many pages a single crawl will ever visit. Without this,
-# a site with tracking/query params, calendars, or locator pages
-# (?state=X&city=Y for every city) can generate effectively unlimited
-# "new" URLs and the crawl never finishes. Override with an env var if needed.
+# Which browser TLS/HTTP fingerprint curl_cffi should impersonate. Cloudflare
+# and similar WAFs fingerprint the TLS handshake itself (JA3), not just the
+# User-Agent header — plain `requests`/urllib3 has a fingerprint that gets
+# flagged even with a browser User-Agent set. curl_cffi reproduces a real
+# Chrome handshake, which is why this clears the 403 that `requests` hit.
+IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome124")
+
+# Fallback budget used only when a site has no discoverable sitemap at all
+# (in which case we fall back to pure link-crawling from the homepage).
 MAX_PAGES = int(os.getenv("SCRAPE_MAX_PAGES", "60"))
 
-# How many pages to fetch at the same time. Was 1-at-a-time before, which is
-# why a large site took hours — most of that time was just waiting on network
-# round trips serially instead of in parallel.
+# Hard ceiling on how many pages we'll ever scrape even when the sitemap
+# declares far more (e.g. au.bank.in declares 3,349 URLs). Without this,
+# a sitemap-seeded crawl of a large site would try to hit every single
+# page, which is slow and burns a lot of Gemini calls for table summaries.
+MAX_PAGES_CEILING = int(os.getenv("SCRAPE_MAX_PAGES_CEILING", "300"))
+
+# URL substrings that mark "lower priority" content — pages containing any
+# of these get pushed to the end of the queue and are the first to be cut
+# when the sitemap total exceeds MAX_PAGES_CEILING. Extend as needed
+# (e.g. "/press-release/", "/careers/").
+LOW_PRIORITY_PATTERNS = ["/blog/"]
+
 MAX_CONCURRENT_REQUESTS = int(os.getenv("SCRAPE_CONCURRENCY", "5"))
 
 
@@ -49,10 +57,6 @@ def hash_url(url):
 
 
 def normalize_url(url):
-    """Collapse https://site.com/page, https://site.com/page/, and
-    https://site.com/page?ref=abc&utm_source=x into one URL. Without this,
-    query-string/tracking params make the crawler treat the same page as
-    endless "new" pages — the most common reason a crawl never terminates."""
     try:
         parsed = urlparse(url)
         path = parsed.path.rstrip("/") or "/"
@@ -72,14 +76,54 @@ def is_internal_link(base_url, link):
 
 
 def _fetch_html(url):
-    """Blocking HTTP GET. Always called via asyncio.to_thread so the rest of the
-    file can stay async without needing an async HTTP client."""
-    response = requests.get(url, headers=REQUEST_HEADERS, timeout=REQUEST_TIMEOUT)
+    """Blocking HTTP GET via curl_cffi, which impersonates a real browser's
+    TLS fingerprint (not just headers) — needed because plain requests/urllib3
+    gets blocked by Cloudflare/Akamai-style bot management even with a
+    spoofed User-Agent. Always called via asyncio.to_thread so the rest of
+    the file can stay async."""
+    response = curl_requests.get(
+        url,
+        impersonate=IMPERSONATE_PROFILE,
+        timeout=REQUEST_TIMEOUT,
+    )
     response.raise_for_status()
     content_type = response.headers.get("Content-Type", "")
     if "text/html" not in content_type:
         raise ValueError(f"Skipping non-HTML content ({content_type}) at {url}")
     return response.text
+
+
+def _prioritize_urls(urls):
+    """Sorts URLs so 'core' pages come before low-priority ones (blog posts
+    etc). Used to decide what survives when MAX_PAGES_CEILING forces a cut —
+    we want the homepage/products/FAQs kept over a random slice of 2,000
+    blog posts, not whatever order a Python set happens to produce."""
+    def is_low_priority(url):
+        return any(pattern in url for pattern in LOW_PRIORITY_PATTERNS)
+
+    return sorted(urls, key=is_low_priority)  # False (0) sorts before True (1)
+
+
+def get_effective_crawl_plan(main_url):
+    """Discovers sitemap URLs and returns (seed_urls, effective_max_pages).
+    seed_urls is None if no sitemap was found, signalling the caller to fall
+    back to homepage-only link-crawling with the flat MAX_PAGES budget."""
+    sitemap_urls = discover_all_urls(main_url, verbose=False)
+
+    if not sitemap_urls:
+        print(f"[SITEMAP] None found for {main_url} — falling back to "
+              f"link-crawl from homepage with MAX_PAGES={MAX_PAGES}.")
+        return None, MAX_PAGES
+
+    ordered = _prioritize_urls(sitemap_urls)
+    capped = len(ordered) > MAX_PAGES_CEILING
+    effective = min(len(ordered), MAX_PAGES_CEILING)
+
+    print(f"[SITEMAP] {len(ordered)} URLs declared for {main_url}"
+          + (f", capped to {effective} (low-priority pages dropped first)" if capped else "")
+          + ".")
+
+    return ordered[:effective], effective
 
 
 async def scrape_page(url):
@@ -113,13 +157,6 @@ async def scrape_page(url):
         full_text = body.get_text(separator="\n", strip=True) if body else soup.get_text(separator="\n", strip=True)
 
         # Extract FAQs
-        # NOTE: unlike Playwright, BeautifulSoup only sees the static HTML that
-        # was returned by the server — there's no "click to expand" step because
-        # there's no live page to click on. If the FAQ answers are only inserted
-        # into the DOM by JavaScript on click, they won't be present here and
-        # this block will simply find nothing. If the site renders the Q&A HTML
-        # up front and just hides it with CSS (common for AEM-style accordions),
-        # this will still pick it up.
         faqs = []
         try:
             faq_container = soup.select_one(".faqs.aem-GridColumn.aem-GridColumn--default--12")
@@ -155,7 +192,6 @@ async def scrape_page(url):
         print("===========================================================\n")
 
         print(f"[SCRAPE DONE] {url}")
-        print("Scraped Data--------------------------->", result)
         return result
 
     except Exception as e:
@@ -190,7 +226,17 @@ async def scrape_with_playwright_recursive(main_url):
     # (scrape_web_data below, and anything else importing it directly),
     # even though it no longer launches Playwright/a browser.
     main_url = normalize_url(main_url)
-    to_scrape = {main_url}
+
+    seed_urls, effective_max_pages = get_effective_crawl_plan(main_url)
+
+    if seed_urls:
+        # Sitemap-seeded: start the queue with prioritized, capped sitemap
+        # URLs rather than relying purely on link-following from the
+        # homepage, so pages with no internal inbound links still get hit.
+        to_scrape = {normalize_url(u) for u in seed_urls}
+    else:
+        to_scrape = {main_url}
+
     scraped = set()
     results = []
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -207,13 +253,13 @@ async def scrape_with_playwright_recursive(main_url):
                     print(f"[LINKS] Failed to extract internal links from {url}: {e}")
             return url, result, links
 
-    while to_scrape and len(scraped) < MAX_PAGES:
+    while to_scrape and len(scraped) < effective_max_pages:
         # Pull a batch (bounded by remaining page budget) and fetch it concurrently
         # instead of one page at a time — this is what was making a full crawl take hours.
-        remaining_budget = MAX_PAGES - len(scraped)
+        remaining_budget = effective_max_pages - len(scraped)
         batch = [to_scrape.pop() for _ in range(min(len(to_scrape), remaining_budget))]
 
-        print(f"[BATCH] Fetching {len(batch)} pages (scraped so far: {len(scraped)}/{MAX_PAGES})")
+        print(f"[BATCH] Fetching {len(batch)} pages (scraped so far: {len(scraped)}/{effective_max_pages})")
         batch_results = await asyncio.gather(*(process(url) for url in batch))
 
         for url, result, links in batch_results:
@@ -225,9 +271,9 @@ async def scrape_with_playwright_recursive(main_url):
                 if norm_link not in scraped and norm_link not in to_scrape:
                     to_scrape.add(norm_link)
 
-    if len(scraped) >= MAX_PAGES and to_scrape:
-        print(f"[CRAWL] Hit MAX_PAGES={MAX_PAGES} cap — {len(to_scrape)} more discovered URLs were left unvisited. "
-              f"Raise SCRAPE_MAX_PAGES if you need a deeper crawl.")
+    if len(scraped) >= effective_max_pages and to_scrape:
+        print(f"[CRAWL] Hit effective_max_pages={effective_max_pages} cap — {len(to_scrape)} more discovered URLs were left unvisited. "
+              f"Raise SCRAPE_MAX_PAGES_CEILING if you need a deeper crawl.")
 
     _print_crawl_summary(main_url, results)
     return results
