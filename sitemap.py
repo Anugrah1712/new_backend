@@ -11,14 +11,34 @@ from urllib.parse import urljoin
 IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome119")
 REQUEST_TIMEOUT = 20
 
+# See webscrape.py for why this exists: curl_cffi's TLS impersonation can't
+# solve an interactive Cloudflare challenge (cf-mitigated: challenge), only
+# a real browser (or a scraping API that runs one) can. Same env var as
+# webscrape.py so both files stay in sync.
+SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
+SCRAPER_API_URL = "https://api.scraperapi.com"
+
 # Common sitemap locations to try, in order, before giving up
 SITEMAP_CANDIDATES = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml"]
 
 
 def _fetch(url):
-    response = curl_requests.get(url, impersonate=IMPERSONATE_PROFILE, timeout=REQUEST_TIMEOUT)
-    response.raise_for_status()
-    return response.content
+    try:
+        response = curl_requests.get(url, impersonate=IMPERSONATE_PROFILE, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return response.content
+    except Exception as e:
+        is_cf_challenge = "403" in str(e) or "cf-mitigated" in str(e).lower()
+        if not (is_cf_challenge and SCRAPER_API_KEY):
+            raise
+        print(f"[SCRAPE-API] Direct sitemap fetch blocked for {url} ({e}) — retrying via scraping API")
+        api_response = curl_requests.get(
+            SCRAPER_API_URL,
+            params={"api_key": SCRAPER_API_KEY, "url": url},
+            timeout=REQUEST_TIMEOUT * 2,
+        )
+        api_response.raise_for_status()
+        return api_response.content
 
 
 def _get_sitemap_urls_from_robots(base_url):

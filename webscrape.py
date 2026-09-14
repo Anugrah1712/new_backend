@@ -33,6 +33,15 @@ REQUEST_TIMEOUT = 20  # seconds
 # Chrome handshake, which is why this clears the 403 that `requests` hit.
 IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome119")
 
+# When a site serves an interactive Cloudflare challenge (cf-mitigated: challenge),
+# no TLS/JA3 impersonation can get past it — curl_cffi never executes the JS
+# challenge. SCRAPER_API_KEY switches fetches to a third-party scraping API
+# (ScraperAPI here; swap the URL template for ZenRows/ScrapingBee/etc. if you
+# use a different provider) that solves the challenge server-side and returns
+# rendered HTML. If unset, we fall back to the direct curl_cffi request as before.
+SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
+SCRAPER_API_URL = "https://api.scraperapi.com"
+
 # Fallback budget used only when a site has no discoverable sitemap at all
 # (in which case we fall back to pure link-crawling from the homepage).
 MAX_PAGES = int(os.getenv("SCRAPE_MAX_PAGES", "60"))
@@ -76,21 +85,40 @@ def is_internal_link(base_url, link):
 
 
 def _fetch_html(url):
-    """Blocking HTTP GET via curl_cffi, which impersonates a real browser's
-    TLS fingerprint (not just headers) — needed because plain requests/urllib3
-    gets blocked by Cloudflare/Akamai-style bot management even with a
-    spoofed User-Agent. Always called via asyncio.to_thread so the rest of
-    the file can stay async."""
-    response = curl_requests.get(
-        url,
-        impersonate=IMPERSONATE_PROFILE,
-        timeout=REQUEST_TIMEOUT,
-    )
-    response.raise_for_status()
-    content_type = response.headers.get("Content-Type", "")
-    if "text/html" not in content_type:
-        raise ValueError(f"Skipping non-HTML content ({content_type}) at {url}")
-    return response.text
+    """Blocking HTTP GET, called via asyncio.to_thread so the rest of the
+    file can stay async.
+
+    Tries curl_cffi's browser-TLS-impersonation first (cheap, no external
+    dependency). If that comes back with a Cloudflare interactive challenge
+    (not just a plain 403 — check the response for the challenge markers)
+    and SCRAPER_API_KEY is configured, retries through the scraping API,
+    which runs a real headless browser and solves the challenge for us.
+    """
+    try:
+        response = curl_requests.get(
+            url,
+            impersonate=IMPERSONATE_PROFILE,
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        content_type = response.headers.get("Content-Type", "")
+        if "text/html" not in content_type:
+            raise ValueError(f"Skipping non-HTML content ({content_type}) at {url}")
+        return response.text
+
+    except Exception as e:
+        is_cf_challenge = "403" in str(e) or "cf-mitigated" in str(e).lower()
+        if not (is_cf_challenge and SCRAPER_API_KEY):
+            raise
+
+        print(f"[SCRAPE-API] Direct fetch blocked for {url} ({e}) — retrying via scraping API")
+        api_response = curl_requests.get(
+            SCRAPER_API_URL,
+            params={"api_key": SCRAPER_API_KEY, "url": url, "render": "true"},
+            timeout=REQUEST_TIMEOUT * 2,  # challenge-solving + JS render takes longer
+        )
+        api_response.raise_for_status()
+        return api_response.text
 
 
 def _prioritize_urls(urls):
@@ -296,7 +324,12 @@ def _print_crawl_summary(main_url, results):
     print(f"Total FAQs      : {total_faqs}")
     print("-" * 70)
     if not results:
-        print("⚠️  No pages were scraped — check the URL and any bot-blocking (e.g. Cloudflare).")
+        hint = (
+            "no SCRAPER_API_KEY configured — set one to fall back to a challenge-solving "
+            "scraping API" if not SCRAPER_API_KEY else
+            "scraping API fetch also failed — check SCRAPER_API_KEY / provider quota"
+        )
+        print(f"⚠️  No pages were scraped — likely Cloudflare bot-blocking ({hint}).")
     for i, r in enumerate(results, start=1):
         word_count = len(r.get("full_text", "").split())
         table_count = len(r.get("table_summaries", []))
@@ -323,4 +356,15 @@ async def convert_table_to_sentences_gemini(table_data, index):
 
 
 async def scrape_web_data(url):
-    return await scrape_with_playwright_recursive(url)
+    results = await scrape_with_playwright_recursive(url)
+    if not results:
+        hint = (
+            "Set SCRAPER_API_KEY (see webscrape.py) to fall back to a challenge-solving "
+            "scraping API." if not SCRAPER_API_KEY else
+            "Scraping API fetch failed too — check SCRAPER_API_KEY / provider quota/credits."
+        )
+        raise RuntimeError(
+            f"Scraping {url} returned 0 pages — the site is very likely blocking direct "
+            f"requests with a Cloudflare interactive challenge. {hint}"
+        )
+    return results
