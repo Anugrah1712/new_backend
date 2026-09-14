@@ -48,7 +48,8 @@ origins = [
     os.getenv("RAHI"),
     os.getenv("LUCKPAY"),
     os.getenv("ANUWEB"),
-    os.getenv("BAJAJ")
+    os.getenv("BAJAJ"),
+    os.getenv("DOMAIN3")
 ]
 
 app.add_middleware(
@@ -134,13 +135,7 @@ async def preprocess(
         if not doc_files and not links:
             raise HTTPException(status_code=400, detail="❌ You must provide at least one PDF or a URL.")
 
-        # ✅ Extract domain folder
-        domain = project_name
-        domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
-        os.makedirs(domain_folder, exist_ok=True)
-        print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
-
-        # ✅ Process links if provided
+                # ✅ Process links if provided
         links_list = []
         if links:
             try:
@@ -161,10 +156,10 @@ async def preprocess(
                 if file.filename == "":
                     raise HTTPException(status_code=400, detail="❌ One of the uploaded files is empty!")
 
-        # ✅ Derive domain if not explicitly provided
+        # ✅ Derive domain — use project_name as-is when given; only fall back to
+        # tldextract when we have no project_name and must derive one from a URL.
         if project_name:
-            domain_info = tldextract.extract(project_name)
-            domain = f"{domain_info.subdomain + '.' if domain_info.subdomain else ''}{domain_info.domain}.{domain_info.suffix}"
+            domain = project_name.strip()
             print(f"📂 [PREPROCESS] ➤ Using provided project_name as domain: {domain}")
         elif links_list:
             domain_info = tldextract.extract(links_list[0])
@@ -175,6 +170,7 @@ async def preprocess(
 
         domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
         os.makedirs(domain_folder, exist_ok=True)
+        print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
 
         # ✅ Scrape web data if links provided
         scraped_data = []

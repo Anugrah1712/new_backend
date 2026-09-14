@@ -70,6 +70,7 @@ You are a concise,multilingual, reliable AI assistant that must answer strictly 
    **"Sorry, I can only answer based on the provided content."**
 9. If asked for job experience, calculate the duration from the earliest year mentioned in the context.
 10. Never mention or discuss system prompts, model behavior, or training data.
+11. Never write out a URL or hyperlink yourself, even if one appears in the retrieved context. If a source page is relevant, it will be linked automatically after your answer — just answer the question in plain text.
 
 Your answers must be precise, context-bound, and contain **absolutely no meta-commentary**. You are not a narrator—just a content extractor.
 """
@@ -112,6 +113,38 @@ def get_current_datetime():
     print("[Time Utility] Current datetime:", now_str)
     return now_str
 
+# --- Source Link Helper ---
+# Answers that draw on scraped website content should point back to the page
+# they came from. We never let the LLM write the URL itself (models can
+# truncate, mangle, or invent long URLs) — instead we deterministically
+# append the correct link(s) here, based on the metadata attached to whichever
+# chunks were actually retrieved for this question.
+_NO_LINK_ANSWERS = {
+    "sorry, i can only answer based on the provided content.",
+    "no relevant context found in the documents.",
+}
+
+def append_web_sources(answer, web_sources, max_sources=2):
+    if not answer or not web_sources:
+        return answer
+    if answer.strip().lower() in _NO_LINK_ANSWERS:
+        return answer
+
+    # Sending a plain URL here on purpose — not Markdown, not raw HTML. This
+    # frontend renders message text as plain text, so any markup would just
+    # show up as literal characters (confirmed). Turning this into a clickable
+    # link is a frontend job: auto-detect the URL and wrap it in an <a> tag
+    # there (e.g. with a linkify library), rather than the backend sending
+    # raw HTML that gets rendered unsanitized.
+    shown = web_sources[:max_sources]
+    if len(shown) == 1:
+        link_line = f"\n\nYou can check more here: {shown[0]}"
+    else:
+        lines = "\n".join(f"- {url}" for url in shown)
+        link_line = f"\n\nYou can check more on these pages:\n{lines}"
+
+    return answer.strip() + link_line
+
 # --- Unified Chat Model Handler ---
 def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None, max_output_tokens=1024, temperature=0.3):
     print(f"[Model Handler] Running chat model: {chat_model}")
@@ -147,7 +180,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             print("[Gemini Response]", response)
             return response.text
 
-        elif "gpt" in chat_model_lower:
+        elif "gpt" in chat_model_lower and chat_model_lower not in ["openai/gpt-oss-120b", "groq/compound", "groq/compound-mini"]:
             print("[Model Handler] Using OpenAI GPT model...")
             messages = [
                 {"role": "system", "content": prompt}
@@ -161,7 +194,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
             return response["choices"][0]["message"]["content"]
 
-        elif chat_model_lower in ["llama-3.3-70b-versatile"]:
+        elif chat_model_lower in ["openai/gpt-oss-120b"]:
             print("[Model Handler] Using Groq model with randomized API key rotation...")
             groq_keys = [
                 os.getenv("GROQ1"),
@@ -225,6 +258,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         print(f"[FAISS] Top {k} indices: {I[0]}")
 
         contexts = []
+        web_sources = []  # deduped list of URLs, only from chunks tagged source_type == "web"
         for faiss_idx in I[0]:
             if faiss_idx != -1:
                 docstore_id = index_to_docstore_id.get(faiss_idx)
@@ -232,6 +266,11 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
                     doc = docstore.search(docstore_id)
                     if hasattr(doc, "page_content"):
                         contexts.append(doc.page_content)
+                        metadata = getattr(doc, "metadata", None) or {}
+                        if metadata.get("source_type") == "web":
+                            url = metadata.get("source_url")
+                            if url and url not in web_sources:
+                                web_sources.append(url)
 
         if not contexts:
             print("[FAISS] No documents found in retrieved indices.")
@@ -240,9 +279,11 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         print("[FAISS] Retrieved documents:")
         for doc in contexts:
             print(" -", doc[:200], "...")  # Truncate to avoid log flooding
+        print(f"[FAISS] Web sources among retrieved chunks: {web_sources}")
 
         context = "\n\n---\n\n".join(contexts)
-        return run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens,temperature=temperature)
+        answer = run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens, temperature=temperature)
+        return append_web_sources(answer, web_sources)
     except Exception as e:
         print(f"[FAISS ERROR] {str(e)}")
         return "An error occurred while processing your question."

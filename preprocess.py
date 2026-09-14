@@ -26,7 +26,7 @@ load_dotenv()
 
 # Preprocess uploaded files + scraped data into text chunks
 async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, scraped_data=None):
-    paragraphs = []
+    docs = []
 
     for file in files:
         # Handle FastAPI UploadFile
@@ -48,11 +48,14 @@ async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, 
         # PDF handling
         if filename.endswith(".pdf"):
             reader = PdfReader(file_object)
-            for page in reader.pages:
+            for page_num, page in enumerate(reader.pages, start=1):
                 page_text = page.extract_text()
                 if page_text:
                     cleaned_text = ' '.join(page_text.split())
-                    paragraphs.append(cleaned_text)
+                    docs.append(LangchainDocument(
+                        page_content=cleaned_text,
+                        metadata={"source_type": "document", "source_name": filename, "page": page_num}
+                    ))
 
         # DOCX handling
         elif filename.endswith(".docx"):
@@ -61,31 +64,44 @@ async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, 
             for para in docx.paragraphs:
                 if para.text.strip():
                     full_text += para.text.strip() + "\n\n"
-            paragraphs.append(full_text)
+            if full_text.strip():
+                docs.append(LangchainDocument(
+                    page_content=full_text,
+                    metadata={"source_type": "document", "source_name": filename}
+                ))
 
-    print(f"📄 Total paragraphs after split: {len(paragraphs)}")
-    print("🧩 First 5 extracted paragraphs:")
-    for i, p in enumerate(paragraphs[:5]):
-        print(f"{i+1}. {p[:100]}...")
+    print(f"📄 Total document-based chunks before scraped data: {len(docs)}")
+    print("🧩 First 5 extracted docs:")
+    for i, d in enumerate(docs[:5]):
+        print(f"{i+1}. {d.page_content[:100]}...")
 
     if scraped_data:
         if isinstance(scraped_data, str):
-            paragraphs.extend(scraped_data.split("\n\n"))  # Break on double newline
+            # Legacy path: plain text blob with no URL attached to any of it.
+            for chunk in scraped_data.split("\n\n"):
+                chunk = chunk.strip()
+                if chunk:
+                    docs.append(LangchainDocument(
+                        page_content=chunk,
+                        metadata={"source_type": "web", "source_url": None}
+                    ))
         elif isinstance(scraped_data, list):
             for item in scraped_data:
                 if isinstance(item, dict) and 'full_text' in item:
+                    url = item.get('url')
                     chunks = [chunk.strip() for chunk in item['full_text'].split("\n\n") if chunk.strip()]
-                    paragraphs.extend(chunks)
+                    for chunk in chunks:
+                        docs.append(LangchainDocument(
+                            page_content=chunk,
+                            metadata={"source_type": "web", "source_url": url}
+                        ))
 
-
-    paragraphs = [para.strip() for para in paragraphs if para.strip()]
-    # print(paragraphs)
-
-    docs = [LangchainDocument(page_content=para) for para in paragraphs]
+    docs = [d for d in docs if d.page_content.strip()]
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=size, chunk_overlap=overlap)
+    # split_documents() carries each Document's metadata over to its split chunks
+    # automatically, so source_type/source_url survive chunking.
     text_chunks = text_splitter.split_documents(docs)
-    # print(text_chunks)
     return text_chunks
 
 # Main entrypoint to support multiple vector DBs
@@ -160,5 +176,3 @@ async def preprocess_vectordbs(
 
     # ❌ Unsupported DB case
     raise ValueError(f"[ERROR] Unsupported vector DB selected: {selected_vectordb}")
-
-
