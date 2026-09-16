@@ -63,7 +63,13 @@ REQUEST_TIMEOUT = 20  # seconds
 # User-Agent header — plain `requests`/urllib3 has a fingerprint that gets
 # flagged even with a browser User-Agent set. curl_cffi reproduces a real
 # Chrome handshake, which is why this clears the 403 that `requests` hit.
-IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome119")
+#
+# Default is safari17_0, not a Chrome profile: on au.bank.in, every single
+# fetch failed on chrome119 (and usually chrome124 too) before succeeding on
+# safari17_0 or chrome120 — this specific WAF has that fingerprint flagged.
+# Starting with the profile that actually wins cuts 2-4 wasted requests per
+# page down to ~0-1.
+IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "safari17_0")
 
 # When a site serves an interactive Cloudflare challenge (cf-mitigated: challenge),
 # no TLS/JA3 impersonation can get past it — curl_cffi never executes the JS
@@ -84,13 +90,13 @@ MAX_PAGES = int(os.getenv("SCRAPE_MAX_PAGES", "60"))
 # declares far more (e.g. au.bank.in declares 3,349 URLs). Without this,
 # a sitemap-seeded crawl of a large site would try to hit every single
 # page, which is slow and burns a lot of Gemini calls for table summaries.
-MAX_PAGES_CEILING = int(os.getenv("SCRAPE_MAX_PAGES_CEILING", "300"))
+MAX_PAGES_CEILING = int(os.getenv("SCRAPE_MAX_PAGES_CEILING", "3000"))
 
 # URL substrings that mark "lower priority" content — pages containing any
 # of these get pushed to the end of the queue and are the first to be cut
 # when the sitemap total exceeds MAX_PAGES_CEILING. Extend as needed
 # (e.g. "/press-release/", "/careers/").
-LOW_PRIORITY_PATTERNS = ["/blog/"]
+LOW_PRIORITY_PATTERNS = ["/blogs/", "/campaign/"]
 
 MAX_CONCURRENT_REQUESTS = int(os.getenv("SCRAPE_CONCURRENCY", "5"))
 
@@ -257,23 +263,78 @@ def _extract_tables(soup):
 
 
 def _extract_faqs(soup):
-    """Pairs each question with the answer found *inside its own accordion row*,
-    instead of zipping two independently-selected lists — one extra toggle or
-    missing body in the page would otherwise misalign every pair after it."""
+    """Locates the FAQ section by heading TEXT rather than a hardcoded CSS
+    class. The class this used to look for (.faqs.aem-GridColumn.aem-Grid
+    Column--default--12) was copied from a different AEM site's build and
+    matches nothing on au.bank.in — every page silently reported 0 FAQs. AEM
+    sites vary their component class names release to release, but the
+    visible heading text ("Frequently Asked Questions") is far more stable,
+    so we anchor there and walk the DOM structurally instead of guessing
+    another exact class."""
     faqs = []
-    faq_container = soup.select_one(".faqs.aem-GridColumn.aem-GridColumn--default--12")
-    if not faq_container:
+
+    heading = None
+    for tag in soup.find_all(["h1", "h2", "h3", "h4"]):
+        text = tag.get_text(strip=True).lower()
+        if "frequently asked question" in text or text == "faqs" or text == "faq":
+            heading = tag
+            break
+
+    if heading is None:
         return faqs
 
-    answer_selector = ".accordion_body, .accordionbody_links, .aem-rte-content"
+    # The FAQ block is typically the heading's parent container (or a level
+    # or two up) holding a repeated list of question/answer units. Walk up
+    # to find something wide enough to hold the whole list, capped so we
+    # don't accidentally grab the <body>.
+    container = heading.parent
+    for _ in range(3):
+        if container is None or container.name == "body":
+            break
+        if len(container.find_all(["h3", "h4", "button", "summary"])) >= 2:
+            break
+        container = container.parent
 
-    for row in faq_container.select(".accordion_row"):
-        question_el = row.select_one(".accordion_toggle") or row.select_one("h3, h4, button")
-        answer_el = row.select_one(answer_selector)
-        if not question_el or not answer_el:
-            continue
-        question = question_el.get_text(strip=True)
-        answer = answer_el.get_text(strip=True)
+    if container is None:
+        return faqs
+
+    # Candidate question elements: heading-like or accordion toggle/button/
+    # summary tags within the container. We don't require matching `heading`
+    # itself here — it's often an h1/h2 while questions are h3/h4, so it
+    # would never appear in this list and a "have we passed it yet" flag
+    # would never flip. Since `container` was already anchored on `heading`,
+    # everything found here already sits at-or-after it structurally.
+    candidates = [c for c in container.find_all(["h3", "h4", "button", "summary"])
+                  if c is not heading]
+
+    for i, q_el in enumerate(candidates):
+        question = q_el.get_text(strip=True)
+        if not question or len(question) > 300:
+            continue  # skip empty toggles or accidental non-question matches
+
+        # The answer is whatever text sits between this question element and
+        # the next one in document order — covers <details>, accordion divs,
+        # or a plain following sibling, without needing a specific class name.
+        answer_parts = []
+        for sib in q_el.find_all_next():
+            if sib in candidates[i + 1:]:
+                break
+            if sib.name in ("h3", "h4", "button", "summary"):
+                break
+            # Only take leaf text nodes (no nested tags). A wrapping <div> or
+            # <li> around the *next* question/answer block also matches
+            # name+has-text, but its .get_text() pulls in everything nested
+            # inside it — including the next Q&A — well before we reach that
+            # block's own heading tag in this flattened traversal. Skipping
+            # non-leaf containers avoids that bleed.
+            if sib.name in ("p", "li", "div", "span") and not sib.find(True) \
+                    and sib.get_text(strip=True):
+                answer_parts.append(sib.get_text(strip=True))
+
+        answer = " ".join(dict.fromkeys(answer_parts))  # de-dupe, keep order
+        # Strip the "See more" expander boilerplate that AEM injects into every card.
+        answer = re.sub(r"\bSee more\b\.?$", "", answer, flags=re.IGNORECASE).strip()
+
         if question and answer:
             faqs.append({"question": question, "answer": answer})
 
