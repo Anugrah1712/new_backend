@@ -13,7 +13,7 @@ pymilvus
 weaviate-client
 PyPDF2
 
-
+google-generativeai
 pinecone
 google-genai
 python-multipart
