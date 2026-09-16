@@ -15,7 +15,7 @@ PyPDF2
 
 
 pinecone
-google-generativeai
+google-genai
 python-multipart
 
 openai

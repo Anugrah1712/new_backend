@@ -5,40 +5,70 @@ from lxml import etree
 from urllib.parse import urljoin
 
 # Same env var webscrape.py reads, so both files stay in sync on which
-# browser fingerprint curl_cffi impersonates. Default matches whatever
-# profile currently clears au.bank.in's Cloudflare check (chrome119 as
-# of the last test — chrome124/131/120 were blocked).
+# browser fingerprint curl_cffi impersonates.
 IMPERSONATE_PROFILE = os.getenv("SCRAPE_IMPERSONATE", "chrome119")
 REQUEST_TIMEOUT = 20
 
-# See webscrape.py for why this exists: curl_cffi's TLS impersonation can't
-# solve an interactive Cloudflare challenge (cf-mitigated: challenge), only
-# a real browser (or a scraping API that runs one) can. Same env var as
-# webscrape.py so both files stay in sync.
-SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
-SCRAPER_API_URL = "https://api.scraperapi.com"
+# NEW: outbound proxy for scraping. Set this in your deployment env
+# (docker-compose / systemd / ECS task def), NOT locally — this is the
+# actual fix for "works on my Mac, 403s on the server". AWS/GCP/Azure
+# datacenter IPs are blocked or hard-challenged by Cloudflare/Akamai-class
+# WAFs on banking sites independent of TLS fingerprint. Use a residential
+# or ISP-tier proxy provider (e.g. Bright Data, Oxylabs, Smartproxy).
+# Format: "http://user:pass@proxy-host:port"
+SCRAPE_PROXY = os.getenv("SCRAPE_PROXY")  # leave unset to disable
+
+# Fallback chain of impersonation profiles to retry on 403, in case the
+# pinned profile itself has also gone stale (Cloudflare periodically
+# invalidates specific JA3 fingerprints).
+IMPERSONATE_FALLBACKS = [
+    p.strip() for p in os.getenv(
+        "SCRAPE_IMPERSONATE_FALLBACKS",
+        "chrome119,chrome124,chrome120,chrome131,safari17_0"
+    ).split(",") if p.strip()
+]
 
 # Common sitemap locations to try, in order, before giving up
 SITEMAP_CANDIDATES = ["/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml"]
 
 
 def _fetch(url):
-    try:
-        response = curl_requests.get(url, impersonate=IMPERSONATE_PROFILE, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        return response.content
-    except Exception as e:
-        is_cf_challenge = "403" in str(e) or "cf-mitigated" in str(e).lower()
-        if not (is_cf_challenge and SCRAPER_API_KEY):
-            raise
-        print(f"[SCRAPE-API] Direct sitemap fetch blocked for {url} ({e}) — retrying via scraping API")
-        api_response = curl_requests.get(
-            SCRAPER_API_URL,
-            params={"api_key": SCRAPER_API_KEY, "url": url},
-            timeout=REQUEST_TIMEOUT * 2,
-        )
-        api_response.raise_for_status()
-        return api_response.content
+    """Fetches a URL, trying the pinned impersonate profile first, then
+    falling back through IMPERSONATE_FALLBACKS on 403 (Forbidden) —
+    covers the case where Cloudflare has invalidated one fingerprint but
+    not others. Routes through SCRAPE_PROXY if set."""
+    profiles_to_try = [IMPERSONATE_PROFILE] + [
+        p for p in IMPERSONATE_FALLBACKS if p != IMPERSONATE_PROFILE
+    ]
+
+    last_exc = None
+    for profile in profiles_to_try:
+        try:
+            kwargs = {
+                "impersonate": profile,
+                "timeout": REQUEST_TIMEOUT,
+            }
+            if SCRAPE_PROXY:
+                kwargs["proxies"] = {"http": SCRAPE_PROXY, "https": SCRAPE_PROXY}
+
+            response = curl_requests.get(url, **kwargs)
+            response.raise_for_status()
+
+            if profile != IMPERSONATE_PROFILE:
+                print(f"[FETCH] {url} succeeded with fallback profile '{profile}' "
+                      f"(pinned '{IMPERSONATE_PROFILE}' was blocked)")
+            return response.content
+
+        except Exception as e:
+            last_exc = e
+            is_403 = "403" in str(e)
+            print(f"[FETCH] Profile '{profile}' failed for {url}: {e}")
+            if not is_403:
+                # Non-403 errors (timeout, DNS, etc.) won't be fixed by
+                # switching TLS fingerprint — stop trying other profiles.
+                break
+
+    raise last_exc
 
 
 def _get_sitemap_urls_from_robots(base_url):
@@ -75,17 +105,15 @@ def _parse_sitemap_xml(xml_bytes):
 
 def discover_all_urls(base_url, max_sub_sitemaps=200, verbose=True):
     """Walks sitemap index -> sub-sitemaps -> page URLs, returns the full set
-    of unique page URLs the site's sitemap declares. This is what should
-    drive MAX_PAGES dynamically instead of hardcoding it."""
+    of unique page URLs the site's sitemap declares."""
     base_url = base_url.rstrip("/")
     all_page_urls = set()
 
-    # Find candidate sitemap URLs: robots.txt first, then common paths as fallback
     candidates = _get_sitemap_urls_from_robots(base_url)
     if not candidates:
         candidates = [urljoin(base_url + "/", path.lstrip("/")) for path in SITEMAP_CANDIDATES]
 
-    to_visit = list(dict.fromkeys(candidates))  # dedupe, preserve order
+    to_visit = list(dict.fromkeys(candidates))
     visited_sitemaps = set()
 
     while to_visit and len(visited_sitemaps) < max_sub_sitemaps:
