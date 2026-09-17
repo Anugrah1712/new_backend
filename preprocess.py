@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from io import BytesIO
 import os
 import pickle
+import hashlib
 import numpy as np
 from typing import Union
 import sys
@@ -23,6 +24,36 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 sys.modules["sqlite3"] = sqlite3
 
 load_dotenv()
+
+
+def _normalize_for_hash(text):
+    """Collapses whitespace/case so near-identical chunks (same sidebar,
+    slightly different trailing spaces/newlines) hash the same."""
+    return " ".join(text.split()).lower()
+
+
+def _is_link_list_chunk(text, max_line_len=40, min_lines=4, threshold=0.7):
+    """Heuristic for nav/sidebar 'Related Links' style blocks: mostly short
+    lines with no sentence-ending punctuation. These carry navigation value,
+    not article content, and — because the same sidebar repeats verbatim
+    across every page in a category (all loan pages, all card pages, etc.)
+    — they flood the vector store with near-duplicate, keyword-dense chunks
+    that out-rank the one real content chunk on any topical query.
+
+    This is deliberately per-page-category robust: unlike the crawler's
+    cross-page frequency stripper (which only catches lines repeated on
+    >50% of ALL pages site-wide), this catches link-list *shape* regardless
+    of what fraction of pages it appears on.
+    """
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    if len(lines) < min_lines:
+        return False
+    short_no_punct = sum(
+        1 for l in lines
+        if len(l) <= max_line_len and not l.rstrip().endswith((".", "!", "?", ":"))
+    )
+    return (short_no_punct / len(lines)) >= threshold
+
 
 # Preprocess uploaded files + scraped data into text chunks
 async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, scraped_data=None):
@@ -76,25 +107,59 @@ async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, 
         print(f"{i+1}. {d.page_content[:100]}...")
 
     if scraped_data:
+        seen_hashes = set()
+        dropped_dupes = 0
+        dropped_linklists = 0
+
         if isinstance(scraped_data, str):
             # Legacy path: plain text blob with no URL attached to any of it.
             for chunk in scraped_data.split("\n\n"):
                 chunk = chunk.strip()
-                if chunk:
-                    docs.append(LangchainDocument(
-                        page_content=chunk,
-                        metadata={"source_type": "web", "source_url": None}
-                    ))
+                if not chunk:
+                    continue
+                if _is_link_list_chunk(chunk):
+                    dropped_linklists += 1
+                    continue
+                chunk_hash = hashlib.sha256(_normalize_for_hash(chunk).encode("utf-8")).hexdigest()
+                if chunk_hash in seen_hashes:
+                    dropped_dupes += 1
+                    continue
+                seen_hashes.add(chunk_hash)
+                docs.append(LangchainDocument(
+                    page_content=chunk,
+                    metadata={"source_type": "web", "source_url": None}
+                ))
         elif isinstance(scraped_data, list):
             for item in scraped_data:
                 if isinstance(item, dict) and 'full_text' in item:
                     url = item.get('url')
                     chunks = [chunk.strip() for chunk in item['full_text'].split("\n\n") if chunk.strip()]
                     for chunk in chunks:
+                        # Drop nav/sidebar "Related Links" style blocks — these
+                        # repeat near-verbatim across every page in a category
+                        # (loan pages, card pages, etc.) and would otherwise
+                        # flood the index with keyword-dense duplicates that
+                        # out-rank the actual unique content for a topical query.
+                        if _is_link_list_chunk(chunk):
+                            dropped_linklists += 1
+                            continue
+
+                        # Exact/near-duplicate content (the same sidebar or
+                        # boilerplate paragraph appearing on many pages) —
+                        # keep only the first occurrence.
+                        chunk_hash = hashlib.sha256(_normalize_for_hash(chunk).encode("utf-8")).hexdigest()
+                        if chunk_hash in seen_hashes:
+                            dropped_dupes += 1
+                            continue
+                        seen_hashes.add(chunk_hash)
+
                         docs.append(LangchainDocument(
                             page_content=chunk,
                             metadata={"source_type": "web", "source_url": url}
                         ))
+
+        print(f"🧹 [DEDUP] ➤ Dropped {dropped_linklists} link-list-shaped chunks "
+              f"and {dropped_dupes} exact/near-duplicate chunks from scraped data.")
 
     docs = [d for d in docs if d.page_content.strip()]
 
