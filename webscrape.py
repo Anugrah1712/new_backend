@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import os
 import pickle
@@ -10,8 +11,7 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
 from google import genai
 from dotenv import load_dotenv
-
-from sitemap import discover_all_urls  # sitemap crawler from earlier
+from sitemap import discover_all_urls
 
 load_dotenv()
 # Gemini setup
@@ -90,7 +90,7 @@ MAX_PAGES = int(os.getenv("SCRAPE_MAX_PAGES", "60"))
 # declares far more (e.g. au.bank.in declares 3,349 URLs). Without this,
 # a sitemap-seeded crawl of a large site would try to hit every single
 # page, which is slow and burns a lot of Gemini calls for table summaries.
-MAX_PAGES_CEILING = int(os.getenv("SCRAPE_MAX_PAGES_CEILING", "3000"))
+MAX_PAGES_CEILING = int(os.getenv("SCRAPE_MAX_PAGES_CEILING", "3350"))
 
 # URL substrings that mark "lower priority" content — pages containing any
 # of these get pushed to the end of the queue and are the first to be cut
@@ -99,6 +99,26 @@ MAX_PAGES_CEILING = int(os.getenv("SCRAPE_MAX_PAGES_CEILING", "3000"))
 LOW_PRIORITY_PATTERNS = ["/blogs/", "/campaign/"]
 
 MAX_CONCURRENT_REQUESTS = int(os.getenv("SCRAPE_CONCURRENCY", "5"))
+
+# Class-name substrings worth trying opportunistically for the per-page
+# strip below, even though we don't have this site's confirmed markup (same
+# blind spot as the FAQ selector saga — we only ever see rendered/markdown
+# output, never raw HTML with real class names). Harmless if nothing
+# matches; the safety net in _extract_clean_text backs off if a hint
+# accidentally nukes most of the page.
+NAV_FOOTER_CLASS_HINTS = [
+    "header", "navbar", "main-nav", "mainnav", "globalnav", "site-header",
+    "footer", "site-footer", "mega-menu", "megamenu", "language-selector",
+]
+
+# How much of a full crawl's pages a given text LINE has to appear on,
+# verbatim, before we treat it as boilerplate (nav/footer/language-picker)
+# rather than real content, and strip it from every page. This is the
+# primary defense against nav/footer duplication — unlike the class-name
+# guesses above, it doesn't need to know anything about this site's actual
+# markup: it's driven purely by what's observed to repeat across pages.
+BOILERPLATE_FREQUENCY_THRESHOLD = float(os.getenv("SCRAPE_BOILERPLATE_THRESHOLD", "0.5"))
+BOILERPLATE_MIN_PAGES = int(os.getenv("SCRAPE_BOILERPLATE_MIN_PAGES", "5"))
 
 
 def hash_url(url):
@@ -341,6 +361,97 @@ def _extract_faqs(soup):
     return faqs
 
 
+def _extract_clean_text(soup):
+    """Extracts body text with nav/header/footer removed first. Cheap, per-
+    page pass — a first cut, not the primary defense (see
+    _strip_repeated_boilerplate_lines below for that). Operates on a
+    deep-copied body so table/FAQ extraction upstream (which runs on the
+    original `soup`) is never affected by this.
+
+    Every page of this site's full_text was coming back with the entire nav
+    menu and footer duplicated in — the same "Personal Business NRI
+    Premium... Language English..." block and the same footer link list on
+    every single page, which is what flooded the downstream chunker with
+    ~27,000 near-identical chunks. We don't have this site's real HTML
+    (only markdown-rendered output — same blind spot as the FAQ selector),
+    so this pass tries removing <nav>/<header>/<footer> tags plus a list of
+    common nav/footer class-name substrings, with a safety net: if that
+    guess nukes more than 80% of the page's text, we assume a hint matched
+    something it shouldn't have and use the untouched body instead.
+    """
+    body = soup.find("body")
+    if body is None:
+        return soup.get_text(separator="\n", strip=True)
+
+    working = copy.deepcopy(body)
+    original_len = len(working.get_text(strip=True))
+
+    for tag_name in ("nav", "header", "footer"):
+        for el in working.find_all(tag_name):
+            el.decompose()
+    for hint in NAV_FOOTER_CLASS_HINTS:
+        for el in working.select(f'[class*="{hint}"]'):
+            el.decompose()
+
+    stripped_len = len(working.get_text(strip=True))
+    if original_len > 0 and stripped_len < original_len * 0.2:
+        # Guessed class hints were too aggressive on this page — back off
+        # and let the cross-page frequency stripper handle it instead.
+        return body.get_text(separator="\n", strip=True)
+
+    return working.get_text(separator="\n", strip=True)
+
+
+def _strip_repeated_boilerplate_lines(results, min_pages=BOILERPLATE_MIN_PAGES,
+                                       frequency_threshold=BOILERPLATE_FREQUENCY_THRESHOLD):
+    """Cross-page dedup, run once after the whole crawl. This is the primary
+    defense against nav/footer duplication, and unlike _extract_clean_text
+    above, it needs no knowledge of this site's actual markup: a text LINE
+    that shows up verbatim on a large fraction of pages is, by construction,
+    site-wide boilerplate (nav, footer, language picker) rather than page
+    content, regardless of what HTML/CSS produced it. Mutates each result's
+    full_text in place — since these are the same dict objects stored in
+    scraped_cache (scrape_page returns and caches the same object), this
+    also updates the cache automatically; the caller flushes it to disk
+    afterward.
+    """
+    if len(results) < min_pages:
+        return results  # not enough pages to distinguish content from boilerplate
+
+    line_page_counts = {}
+    for r in results:
+        # Count each distinct line once per page (not once per occurrence),
+        # so a line repeated within a single page's body doesn't inflate
+        # its cross-page frequency.
+        for line in set(r.get("full_text", "").split("\n")):
+            line = line.strip()
+            if not line:
+                continue
+            line_page_counts[line] = line_page_counts.get(line, 0) + 1
+
+    threshold_count = max(3, int(len(results) * frequency_threshold))
+    boilerplate_lines = {
+        line for line, count in line_page_counts.items()
+        if count >= threshold_count
+    }
+
+    if not boilerplate_lines:
+        return results
+
+    removed_total = 0
+    for r in results:
+        original_lines = r.get("full_text", "").split("\n")
+        kept_lines = [ln for ln in original_lines if ln.strip() not in boilerplate_lines]
+        removed_total += len(original_lines) - len(kept_lines)
+        r["full_text"] = "\n".join(kept_lines).strip()
+
+    print(f"[BOILERPLATE] Stripped {len(boilerplate_lines)} repeated lines "
+          f"(appearing on ≥{int(frequency_threshold * 100)}% of {len(results)} pages) "
+          f"— {removed_total} total line removals across the crawl.")
+
+    return results
+
+
 async def scrape_page(url):
     """Returns a dict with text, table summaries, FAQs and internal links.
     Links live in the result so a cache hit doesn't trigger a second fetch."""
@@ -369,9 +480,6 @@ async def scrape_page(url):
                 print(f"[WARN] Table summaries failed for {url}: {e}")
                 table_data_list.append(_raw_table_fallback(tables))
 
-        body = soup.find("body")
-        full_text = body.get_text(separator="\n", strip=True) if body else soup.get_text(separator="\n", strip=True)
-
         try:
             faqs = _extract_faqs(soup)
         except Exception as e:
@@ -383,6 +491,11 @@ async def scrape_page(url):
         except Exception as e:
             print(f"[LINKS] Failed to extract internal links from {url}: {e}")
             links = []
+
+        # Text extraction runs last and on a deep-copied body, so it can't
+        # affect the table/FAQ/link extraction above even though it mutates
+        # (a copy of) the tree.
+        full_text = _extract_clean_text(soup)
 
         result = {
             "url": url,
@@ -460,6 +573,11 @@ async def scrape_site_recursive(main_url):
                 failed_urls.append(url)
             for link in links:
                 enqueue(link)
+
+    # Cross-page boilerplate strip BEFORE flushing, so the on-disk cache
+    # reflects the cleaned text too (this mutates the same dict objects that
+    # are already stored in scraped_cache — see the function's docstring).
+    results = _strip_repeated_boilerplate_lines(results)
 
     _flush_cache(force=True)
 

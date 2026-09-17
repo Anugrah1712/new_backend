@@ -21,20 +21,24 @@ load_dotenv()
 
 app = FastAPI()
 
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
 # Initialize SQLite DB
-# conn = sqlite3.connect('/data/chatlog.db', check_same_thread=False)
-# cursor = conn.cursor()
-# cursor.execute('''
-# CREATE TABLE IF NOT EXISTS chatlog (
-#     id INTEGER PRIMARY KEY AUTOINCREMENT,
-#     question TEXT,
-#     answer TEXT,
-#     ip TEXT,
-#     project_name TEXT,
-#     timestamp TEXT
-# )
-# ''')
-# conn.commit()
+DB_PATH = os.getenv("DB_PATH", os.path.join(BASE_DIR, "chatlog.db"))
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS chatlog (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question TEXT,
+    answer TEXT,
+    ip TEXT,
+    project_name TEXT,
+    timestamp TEXT
+)
+''')
+conn.commit()
 
 # Allow frontend CORS origins
 origins = [
