@@ -20,8 +20,43 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 openai.api_key = (OPENAI_API_KEY)
 
+# --- Token budgeting -------------------------------------------------
+# Needed because some providers (Groq's on_demand tier in particular)
+# enforce a hard tokens-per-minute cap per request, not just a daily
+# quota — a prompt that's merely "long" will 413 every single time, no
+# matter which key you use.
+#
+# Deliberately NOT using tiktoken here: its encoder files are fetched
+# from openaipublic.blob.core.windows.net on first use, which 403/fails
+# in network-restricted deployments (firewalled servers, offline CI,
+# etc.) — exactly the kind of environment this token-budget guard needs
+# to keep working in. A ~4-chars/token estimate is conservative enough
+# for budgeting purposes (it slightly over-counts for English text, so
+# it errs on the side of truncating a bit more, never less).
+def count_tokens(text: str) -> int:
+    if not text:
+        return 0
+    return max(1, len(text) // 4)
+
+def _truncate_to_tokens(text: str, max_tokens: int) -> str:
+    if max_tokens <= 0 or not text:
+        return ""
+    max_chars = max_tokens * 4
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
+
+
+# Groq's on_demand tier for openai/gpt-oss-120b caps requests at 8000
+# tokens/minute TOTAL (prompt + completion combined). Keep a safety
+# margin below that for prompt-envelope overhead (chat template, role
+# tokens, etc.) so an estimate that looks "just under" doesn't still 413.
+GROQ_TPM_LIMIT = 8000
+GROQ_SAFETY_MARGIN = 500
+
 # --- Prompt Builder ---
-def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None, max_output_tokens=None):
+def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None,
+                      max_output_tokens=None, max_context_tokens=None, max_history_tokens=None):
     print("[Prompt Builder] Building prompt with:")
     print("- Context length:", len(context))
     print("- Chat history:", history)
@@ -32,6 +67,36 @@ def build_rag_prompt(context, history, question, current_datetime, custom_instru
     # ⚠️ Remove duplicate question if it's the last in history
     if history.strip().endswith(f"User: {question.strip()}"):
         history = "\n".join(history.strip().split("\n")[:-1])
+
+    # Cap context/history to whatever budget the caller gives us (this is
+    # what actually prevents the "request too large" 413s on providers
+    # like Groq that enforce a strict tokens-per-minute limit — without
+    # this, a long conversation or a generous top_k just grows the prompt
+    # unbounded until it blows past the limit).
+    if max_context_tokens is not None:
+        orig_len = count_tokens(context)
+        context = _truncate_to_tokens(context, max_context_tokens)
+        if count_tokens(context) < orig_len:
+            print(f"[Prompt Builder] ⚠️ Context truncated to fit token budget "
+                  f"({orig_len} -> {count_tokens(context)} tokens).")
+
+    if max_history_tokens is not None:
+        orig_len = count_tokens(history)
+        if orig_len > max_history_tokens:
+            # Keep the most RECENT turns, not the oldest — drop from the
+            # front of the history rather than the back.
+            lines = history.split("\n")
+            kept = []
+            running = 0
+            for line in reversed(lines):
+                t = count_tokens(line)
+                if running + t > max_history_tokens:
+                    break
+                kept.append(line)
+                running += t
+            history = "\n".join(reversed(kept))
+            print(f"[Prompt Builder] ⚠️ Chat history truncated to fit token budget "
+                  f"({orig_len} -> {count_tokens(history)} tokens).")
 
     combined_context = f"""Below is a conversation and relevant information.
 
@@ -114,11 +179,12 @@ def get_current_datetime():
     return now_str
 
 # --- Source Link Helper ---
-# Answers that draw on scraped website content should point back to the page
-# they came from. We never let the LLM write the URL itself (models can
-# truncate, mangle, or invent long URLs) — instead we deterministically
-# append the correct link(s) here, based on the metadata attached to whichever
-# chunks were actually retrieved for this question.
+# Answers that draw on scraped website content, or on a URL embedded inside
+# an uploaded PDF/DOCX, should point back to that source. We never let the
+# LLM write the URL itself (models can truncate, mangle, or invent long
+# URLs) — instead we deterministically append the correct link(s) here,
+# based on the metadata attached to whichever chunks were actually
+# retrieved for this question.
 _NO_LINK_ANSWERS = {
     "sorry, i can only answer based on the provided content.",
     "no relevant context found in the documents.",
@@ -156,7 +222,27 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
 
     current_datetime = get_current_datetime()
     history_context = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history])
-    prompt = build_rag_prompt(context, history_context, question, current_datetime, custom_instructions, max_output_tokens=max_output_tokens)
+
+    chat_model_lower_for_budget = chat_model.lower() if chat_model else ""
+    if chat_model_lower_for_budget in ["openai/gpt-oss-120b"]:
+        # Groq on_demand tier: 8000 TPM total (prompt + completion). Leave
+        # room for max_output_tokens and a safety margin, then split what's
+        # left between context and history (context gets the lion's share
+        # since it's usually what answers the question).
+        reserved = (max_output_tokens or 1024) + GROQ_SAFETY_MARGIN
+        available = max(500, GROQ_TPM_LIMIT - reserved)
+        max_context_tokens = int(available * 0.75)
+        max_history_tokens = available - max_context_tokens
+    else:
+        max_context_tokens = None
+        max_history_tokens = None
+
+    prompt = build_rag_prompt(
+        context, history_context, question, current_datetime, custom_instructions,
+        max_output_tokens=max_output_tokens,
+        max_context_tokens=max_context_tokens,
+        max_history_tokens=max_history_tokens,
+    )
 
     try:
         chat_model_lower = chat_model.lower()
@@ -203,16 +289,33 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
                 os.getenv("GROQ4"),
                 os.getenv("GROQ5")
             ]
+            groq_keys = [k for k in groq_keys if k]
             # Shuffle keys before trying
             random.shuffle(groq_keys)
 
-            for key in groq_keys:
+            def _is_tpm_error(msg: str) -> bool:
+                # "Request too large ... tokens per minute (TPM)" — this is a
+                # per-ORG cap on Groq, not per-key, so all GROQ1..GROQ5 keys
+                # (same org) will fail identically. Rotating keys can never
+                # fix this; only shrinking the request can.
+                return "tokens per minute" in msg or "tpm" in msg or "request too large" in msg
+
+            def _is_key_specific_error(msg: str) -> bool:
+                return any(k in msg for k in ["invalid api key", "permission", "unauthorized", "quota", "exhausted"])
+
+            current_prompt = prompt
+            tpm_retry_done = False
+
+            attempt_keys = list(groq_keys)
+            i = 0
+            while i < len(attempt_keys):
+                key = attempt_keys[i]
                 try:
                     client = Groq(api_key=key)
                     response = client.chat.completions.create(
                         model=chat_model,
                         messages=[
-                            {"role": "system", "content": prompt},
+                            {"role": "system", "content": current_prompt},
                             {"role": "user", "content": question}
                         ],
                         temperature=temperature,
@@ -220,12 +323,37 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
                     )
                     print(f"[Groq Response with key ending {key[-4:]}] {response.choices[0].message.content}")
                     return response.choices[0].message.content
-                
+
                 except Exception as e:
                     print(f"[Groq API Key {key[-4:]} Failed] ➤ {e}")
                     error_message = str(e).lower()
-                    if not any(k in error_message for k in ["quota", "exceeded", "limit", "invalid api key", "permission", "unauthorized"]):
-                        return f"An error occurred while generating response: {str(e)}"
+
+                    if _is_tpm_error(error_message):
+                        if not tpm_retry_done:
+                            # Same request will fail on every remaining key
+                            # (shared org quota) — cut the prompt hard and
+                            # retry ONCE with a much smaller context instead
+                            # of burning through all 5 keys pointlessly.
+                            print("[Model Handler] ⚠️ Groq TPM limit hit — "
+                                  "aggressively shrinking prompt and retrying once "
+                                  "instead of rotating keys.")
+                            emergency_budget = max(500, GROQ_TPM_LIMIT - (max_output_tokens or 1024) - 1000)
+                            current_prompt = _truncate_to_tokens(current_prompt, emergency_budget)
+                            tpm_retry_done = True
+                            continue  # retry with the SAME key, smaller prompt
+                        else:
+                            # Already shrank once and it still won't fit —
+                            # further key rotation is pointless, bail out.
+                            return ("This request retrieved too much context for the "
+                                    "model's per-minute token limit even after "
+                                    "trimming. Try a more specific question or a "
+                                    "lower top_k setting.")
+
+                    if _is_key_specific_error(error_message):
+                        i += 1
+                        continue
+
+                    return f"An error occurred while generating response: {str(e)}"
 
             return "This service is temporarily unavailable due to exhausted API usage."
 
@@ -258,7 +386,11 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
         print(f"[FAISS] Top {k} indices: {I[0]}")
 
         contexts = []
-        web_sources = []  # deduped list of URLs, only from chunks tagged source_type == "web"
+        # Deduped list of URLs to cite after the answer. Two sources feed this:
+        #   - scraped web pages: a single URL under metadata["source_url"]
+        #   - uploaded PDFs/DOCX: zero or more URLs found in the doc text,
+        #     under metadata["source_urls"] (see preprocess.py _extract_urls)
+        web_sources = []
         for faiss_idx in I[0]:
             if faiss_idx != -1:
                 docstore_id = index_to_docstore_id.get(faiss_idx)
@@ -267,8 +399,15 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
                     if hasattr(doc, "page_content"):
                         contexts.append(doc.page_content)
                         metadata = getattr(doc, "metadata", None) or {}
+
                         if metadata.get("source_type") == "web":
                             url = metadata.get("source_url")
+                            if url and url not in web_sources:
+                                web_sources.append(url)
+
+                        # NEW: uploaded-document chunks (PDF/DOCX) can carry
+                        # their own embedded URLs — cite those the same way.
+                        for url in metadata.get("source_urls") or []:
                             if url and url not in web_sources:
                                 web_sources.append(url)
 

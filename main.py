@@ -275,7 +275,8 @@ async def select_chat_model(
     initial_message: str = Form("Hello! 👋 How can I help you today?"),
     chatbot_title: str = Form("AI Chat Assistant"),
     top_k: int = Form(8),  
-    temperature: float = Form(0.3)
+    temperature: float = Form(0.3),
+    quick_questions: str = Form(None)  # NEW: JSON-encoded array from the frontend
 ):
     session_state["selected_chat_model"] = chat_model
     session_state["custom_prompt"] = custom_prompt
@@ -285,10 +286,21 @@ async def select_chat_model(
     session_state["top_k"] = top_k
     session_state["temperature"] = temperature
 
+    # NEW: parse the quick_questions JSON string into an actual list.
+    # Falls back to [] on missing/invalid input rather than raising, since
+    # this field is optional and we don't want a bad value to 500 the whole save.
+    try:
+        parsed_quick_questions = json.loads(quick_questions) if quick_questions else []
+        if not isinstance(parsed_quick_questions, list):
+            parsed_quick_questions = []
+    except (json.JSONDecodeError, TypeError):
+        parsed_quick_questions = []
+    session_state["quick_questions"] = parsed_quick_questions
 
     print(f"✅ Value of k: {top_k} & Temperature: {temperature}")
     print(f"✅ Chat model set: {chat_model}, Prompt: {custom_prompt}, Max Tokens: {max_output_tokens}")
     print(f"📝 Title: {chatbot_title}, Initial Message: {initial_message}")
+    print(f"❓ Quick Questions: {parsed_quick_questions}")
 
     # Use project_name directly
     domain = project_name or "local_upload"
@@ -313,6 +325,7 @@ async def select_chat_model(
     loaded_session["chatbot_title"] = chatbot_title
     loaded_session["top_k"] = top_k
     loaded_session["temperature"] = temperature
+    loaded_session["quick_questions"] = parsed_quick_questions  # NEW
 
 
     # Save back to file
@@ -462,7 +475,8 @@ async def get_config(project_name: str = "local_upload"):
         "chat_model": session_data.get("selected_chat_model", ""),
         "max_output_tokens": session_data.get("max_output_tokens", 1024),
         "top_k":session_data.get("top_k"),
-        "temperature":session_data.get("temperature")
+        "temperature":session_data.get("temperature"),
+        "quick_questions": session_data.get("quick_questions", [])  # NEW
     }
 
 
