@@ -8,9 +8,7 @@ __pycache__/
 
 # Ignore database and indexes
 db/
-faiss_index/
 
-*.pkl
 
 
 # Ignore virtual environment
