@@ -9,6 +9,9 @@ from langchain_together import ChatTogether
 from dotenv import load_dotenv
 from groq import Groq
 import random
+import re
+from urllib.parse import urlparse, unquote
+from functools import lru_cache
 
 load_dotenv()
 
@@ -190,26 +193,122 @@ _NO_LINK_ANSWERS = {
     "no relevant context found in the documents.",
 }
 
-def append_web_sources(answer, web_sources, max_sources=2):
-    if not answer or not web_sources:
-        return answer
-    if answer.strip().lower() in _NO_LINK_ANSWERS:
-        return answer
+# Product-aware source recommendation. No fabricated or hardcoded destination URLs.
+PRODUCT_TERMS = {
+    "personal loan": ("personal loan", "personal loans", "personal-loan", "personal-loans", "pl loan"),
+    "fixed deposit": ("fixed deposit", "fixed deposits", "fixed-deposit", "fixed-deposits", "fd", "term deposit"),
+    "savings account": ("savings account", "savings accounts", "savings-account", "savings-accounts"),
+    "msme loan": ("msme", "business loan", "business-loan", "business-loans", "small business loan"),
+    "home loan": ("home loan", "home-loan", "housing loan"),
+    "credit card": ("credit card", "credit-card", "credit cards"),
+    "car loan": ("car loan", "car-loan", "auto loan"),
+    "gold loan": ("gold loan", "gold-loan"),
+    "current account": ("current account", "current-account"),
+    "recurring deposit": ("recurring deposit", "recurring-deposit", "rd account"),
+}
 
-    # Sending a plain URL here on purpose — not Markdown, not raw HTML. This
-    # frontend renders message text as plain text, so any markup would just
-    # show up as literal characters (confirmed). Turning this into a clickable
-    # link is a frontend job: auto-detect the URL and wrap it in an <a> tag
-    # there (e.g. with a linkify library), rather than the backend sending
-    # raw HTML that gets rendered unsanitized.
-    shown = web_sources[:max_sources]
-    if len(shown) == 1:
-        link_line = f"\n\nYou can check more here: {shown[0]}"
-    else:
-        lines = "\n".join(f"- {url}" for url in shown)
-        link_line = f"\n\nYou can check more on these pages:\n{lines}"
 
-    return answer.strip() + link_line
+def _normalized_words(value):
+    return re.sub(r"[^a-z0-9]+", " ", unquote(value).lower()).strip()
+
+
+def _product_for_question(question):
+    q = " " + _normalized_words(question) + " "
+    matches = []
+    for product, aliases in PRODUCT_TERMS.items():
+        for alias in aliases:
+            token = " " + _normalized_words(alias) + " "
+            if token in q:
+                matches.append((len(token), product))
+    return max(matches)[1] if matches else None
+
+
+def _url_kind(url):
+    path = urlparse(url).path.lower()
+    return "blog" if re.search(r"/(blogs?|articles?)/", path + "/") else "main"
+
+
+def _valid_source(url):
+    try:
+        parsed = urlparse(url)
+        return parsed.scheme in ("https", "http") and bool(parsed.netloc) and not any(
+            x in parsed.path.lower() for x in (".pdf", ".jpg", ".png", ".svg", ".zip")
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _source_score(url, product, question, retrieved_urls):
+    path = _normalized_words(urlparse(url).path)
+    question_words = set(_normalized_words(question).split()) - {
+        "what", "which", "where", "how", "the", "for", "are", "can", "with", "does", "and", "apply", "about", "required"
+    }
+    path_words = set(path.split())
+    score = 2 * len(question_words & path_words)
+    if url in retrieved_urls:
+        score += 8
+    if product:
+        aliases = PRODUCT_TERMS[product]
+        matched = any(_normalized_words(alias) in path for alias in aliases)
+        if not matched:
+            return -1000
+        score += 25
+        # Avoid confusing products with overlapping vocabulary.
+        for other_product, other_aliases in PRODUCT_TERMS.items():
+            if other_product != product and any(
+                _normalized_words(a) in path for a in other_aliases if len(_normalized_words(a)) >= 7
+            ):
+                score -= 25
+    if _url_kind(url) == "main":
+        # Prefer short product landing paths over calculators, FAQs and rate subpages.
+        score -= max(0, len(path_words) - 3) * 2
+        if any(w in path_words for w in ("calculator", "eligibility", "faq", "apply", "charges", "interest", "rates")):
+            score -= 12
+        if not path:
+            score -= 50
+    return score
+
+
+def _all_index_sources(docstore):
+    # Build from indexed source metadata, not from LLM-generated text.
+    sources = set()
+    for doc in getattr(docstore, "_dict", {}).values():
+        metadata = getattr(doc, "metadata", {}) or {}
+        candidates = [metadata.get("source_url")] + list(metadata.get("source_urls") or [])
+        for url in candidates:
+            if isinstance(url, str) and _valid_source(url):
+                sources.add(url.strip())
+    return sources
+
+
+def append_web_sources(answer, web_sources, question="", docstore=None, max_sources=2):
+    if not answer or answer.strip().lower() in _NO_LINK_ANSWERS:
+        return answer
+    if answer.lower().startswith(("an error occurred", "this service is temporarily unavailable")):
+        return answer
+    product = _product_for_question(question)
+    retrieved = set(web_sources or [])
+    candidates = _all_index_sources(docstore) if docstore is not None else set()
+    candidates.update(url for url in retrieved if _valid_source(url))
+    # For unknown products, restrict recommendations to actual retrieved evidence.
+    if not product:
+        candidates &= retrieved
+    chosen = {}
+    for kind in ("blog", "main"):
+        ranked = sorted(
+            (u for u in candidates if _url_kind(u) == kind),
+            key=lambda u: (-_source_score(u, product, question, retrieved), len(urlparse(u).path), u),
+        )
+        if ranked and _source_score(ranked[0], product, question, retrieved) > 0:
+            chosen[kind] = ranked[0]
+    if not chosen:
+        return answer
+    lines = []
+    if "main" in chosen and chosen["main"] != chosen.get("blog"):
+            lines.append(f"Official Product Page: {chosen['main']}")
+    if "blog" in chosen:
+        lines.append(f"Related Blog: {chosen['blog']}")
+    return answer.strip() + "\n\nExplore more:\n" + "\n".join(lines[:max_sources])
 
 # --- Unified Chat Model Handler ---
 def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None, max_output_tokens=1024, temperature=0.3):
@@ -422,7 +521,7 @@ def inference_faiss(chat_model, question, embedding_model_global, index, docstor
 
         context = "\n\n---\n\n".join(contexts)
         answer = run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens, temperature=temperature)
-        return append_web_sources(answer, web_sources)
+        return append_web_sources(answer, web_sources, question=question, docstore=docstore)
     except Exception as e:
         print(f"[FAISS ERROR] {str(e)}")
         return "An error occurred while processing your question."
