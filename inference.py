@@ -1,7 +1,7 @@
 # inference.py
 import os
 import google.generativeai as genai
-import openai
+from openai import OpenAI
 import pytz
 import numpy as np
 from datetime import datetime
@@ -21,7 +21,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-openai.api_key = (OPENAI_API_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # --- Token budgeting -------------------------------------------------
 # Needed because some providers (Groq's on_demand tier in particular)
@@ -268,19 +268,42 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             print("[Gemini Response]", response)
             return response.text
 
-        elif "gpt" in chat_model_lower and chat_model_lower not in ["openai/gpt-oss-120b", "groq/compound", "groq/compound-mini"]:
-            print("[Model Handler] Using OpenAI GPT model...")
-            messages = [
-                {"role": "system", "content": prompt}
-            ]
-            response = openai.ChatCompletion.create(
-                model=chat_model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_output_tokens
+        
+        elif (
+            chat_model_lower == "openai/chatgpt"
+            or (
+                "gpt" in chat_model_lower
+                and chat_model_lower not in [
+                    "openai/gpt-oss-120b",
+                    "groq/compound",
+                    "groq/compound-mini"
+                ]
             )
-            print("[OpenAI GPT Response]", response["choices"][0]["message"]["content"])
-            return response["choices"][0]["message"]["content"]
+        ):
+            selected_model = (
+                "gpt-6-luna"
+                if chat_model_lower == "openai/chatgpt"
+                else chat_model
+            )
+
+            print(f"[Model Handler] Using OpenAI: {selected_model}")
+
+            response = openai_client.responses.create(
+                model=selected_model,
+                instructions=(
+                    "You are a reliable RAG assistant. "
+                    "Follow the supplied instructions and use "
+                    "retrieved evidence for factual answers."
+                ),
+                input=prompt,
+                max_output_tokens=max_output_tokens
+            )
+
+            answer = response.output_text
+
+            print("[OpenAI GPT Response]", answer)
+            return answer
+
 
         elif chat_model_lower in ["openai/gpt-oss-120b"]:
             print("[Model Handler] Using Groq model with randomized API key rotation...")
