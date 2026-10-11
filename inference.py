@@ -55,7 +55,7 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
 # margin below that for prompt-envelope overhead (chat template, role
 # tokens, etc.) so an estimate that looks "just under" doesn't still 413.
 GROQ_TPM_LIMIT = 8000
-GROQ_SAFETY_MARGIN = 500
+GROQ_SAFETY_MARGIN = 2500
 
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None,
@@ -193,122 +193,25 @@ _NO_LINK_ANSWERS = {
     "no relevant context found in the documents.",
 }
 
-# Product-aware source recommendation. No fabricated or hardcoded destination URLs.
-PRODUCT_TERMS = {
-    "personal loan": ("personal loan", "personal loans", "personal-loan", "personal-loans", "pl loan"),
-    "fixed deposit": ("fixed deposit", "fixed deposits", "fixed-deposit", "fixed-deposits", "fd", "term deposit"),
-    "savings account": ("savings account", "savings accounts", "savings-account", "savings-accounts"),
-    "msme loan": ("msme", "business loan", "business-loan", "business-loans", "small business loan"),
-    "home loan": ("home loan", "home-loan", "housing loan"),
-    "credit card": ("credit card", "credit-card", "credit cards"),
-    "car loan": ("car loan", "car-loan", "auto loan"),
-    "gold loan": ("gold loan", "gold-loan"),
-    "current account": ("current account", "current-account"),
-    "recurring deposit": ("recurring deposit", "recurring-deposit", "rd account"),
-}
-
-
-def _normalized_words(value):
-    return re.sub(r"[^a-z0-9]+", " ", unquote(value).lower()).strip()
-
-
-def _product_for_question(question):
-    q = " " + _normalized_words(question) + " "
-    matches = []
-    for product, aliases in PRODUCT_TERMS.items():
-        for alias in aliases:
-            token = " " + _normalized_words(alias) + " "
-            if token in q:
-                matches.append((len(token), product))
-    return max(matches)[1] if matches else None
-
-
-def _url_kind(url):
-    path = urlparse(url).path.lower()
-    return "blog" if re.search(r"/(blogs?|articles?)/", path + "/") else "main"
-
-
 def _valid_source(url):
     try:
         parsed = urlparse(url)
-        return parsed.scheme in ("https", "http") and bool(parsed.netloc) and not any(
-            x in parsed.path.lower() for x in (".pdf", ".jpg", ".png", ".svg", ".zip")
-        )
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
     except (TypeError, ValueError):
         return False
 
 
-def _source_score(url, product, question, retrieved_urls):
-    path = _normalized_words(urlparse(url).path)
-    question_words = set(_normalized_words(question).split()) - {
-        "what", "which", "where", "how", "the", "for", "are", "can", "with", "does", "and", "apply", "about", "required"
-    }
-    path_words = set(path.split())
-    score = 2 * len(question_words & path_words)
-    if url in retrieved_urls:
-        score += 8
-    if product:
-        aliases = PRODUCT_TERMS[product]
-        matched = any(_normalized_words(alias) in path for alias in aliases)
-        if not matched:
-            return -1000
-        score += 25
-        # Avoid confusing products with overlapping vocabulary.
-        for other_product, other_aliases in PRODUCT_TERMS.items():
-            if other_product != product and any(
-                _normalized_words(a) in path for a in other_aliases if len(_normalized_words(a)) >= 7
-            ):
-                score -= 25
-    if _url_kind(url) == "main":
-        # Prefer short product landing paths over calculators, FAQs and rate subpages.
-        score -= max(0, len(path_words) - 3) * 2
-        if any(w in path_words for w in ("calculator", "eligibility", "faq", "apply", "charges", "interest", "rates")):
-            score -= 12
-        if not path:
-            score -= 50
-    return score
-
-
-def _all_index_sources(docstore):
-    # Build from indexed source metadata, not from LLM-generated text.
-    sources = set()
-    for doc in getattr(docstore, "_dict", {}).values():
-        metadata = getattr(doc, "metadata", {}) or {}
-        candidates = [metadata.get("source_url")] + list(metadata.get("source_urls") or [])
-        for url in candidates:
-            if isinstance(url, str) and _valid_source(url):
-                sources.add(url.strip())
-    return sources
-
-
 def append_web_sources(answer, web_sources, question="", docstore=None, max_sources=2):
+    """Cite ONLY retrieved evidence; never search unrelated index-wide URLs."""
     if not answer or answer.strip().lower() in _NO_LINK_ANSWERS:
         return answer
     if answer.lower().startswith(("an error occurred", "this service is temporarily unavailable")):
         return answer
-    product = _product_for_question(question)
-    retrieved = set(web_sources or [])
-    candidates = _all_index_sources(docstore) if docstore is not None else set()
-    candidates.update(url for url in retrieved if _valid_source(url))
-    # For unknown products, restrict recommendations to actual retrieved evidence.
-    if not product:
-        candidates &= retrieved
-    chosen = {}
-    for kind in ("blog", "main"):
-        ranked = sorted(
-            (u for u in candidates if _url_kind(u) == kind),
-            key=lambda u: (-_source_score(u, product, question, retrieved), len(urlparse(u).path), u),
-        )
-        if ranked and _source_score(ranked[0], product, question, retrieved) > 0:
-            chosen[kind] = ranked[0]
-    if not chosen:
+    urls = list(dict.fromkeys(u for u in web_sources if isinstance(u, str) and _valid_source(u)))
+    if not urls:
         return answer
-    lines = []
-    if "main" in chosen and chosen["main"] != chosen.get("blog"):
-            lines.append(f"Official Product Page: {chosen['main']}")
-    if "blog" in chosen:
-        lines.append(f"Related Blog: {chosen['blog']}")
-    return answer.strip() + "\n\nExplore more:\n" + "\n".join(lines[:max_sources])
+    return answer.strip() + "\n\nSources:\n" + "\n".join(urls[:max_sources])
+
 
 # --- Unified Chat Model Handler ---
 def run_chat_model(chat_model, context, question, chat_history, custom_instructions=None, max_output_tokens=1024, temperature=0.3):
@@ -460,7 +363,7 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
         else:
             print("[Model Handler] Using Together AI model...")
             model = ChatTogether(
-                together_api_key="94d32cd3eedfd9911a6b1c281bc14d278cd0e4f3e52272b3f7cbbed13e698511",
+                together_api_key=os.getenv("TOGETHER_API_KEY"),
                 model=chat_model
             )
             output = model.predict(prompt, max_tokens=max_output_tokens,temperature=temperature)
@@ -475,57 +378,156 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             return "This service is temporarily unavailable due to exhausted API usage."
         return f"An error occurred while generating response: {str(e)}"
     
-# --- FAISS Inference Only ---
-def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024, top_k=3, temperature=0.3):
-    print("[FAISS] Performing FAISS search...")
+# --- Domain-independent hybrid retrieval ---
+from collections import Counter
+import math
+import hashlib
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+_RETRIEVAL_CACHE = {}
+_STOP = set("the a an is are was were do does did how what which who where when why can could would should i me my you your for of to in on at and or with from it its this that get avail about much many please tell rate".split())
+
+
+def _tokens(text):
+    return [t for t in re.findall(r"[a-z0-9]+(?:[.][0-9]+)?", text.lower()) if t not in _STOP and len(t) > 1]
+
+
+def _retrieval_query(question, chat_history):
+    """Use previous USER question only for elliptical follow-ups, never assistant guesses."""
+    tokens = _tokens(question)
+    if len(tokens) >= 5 or not chat_history:
+        return question
+    previous = [m.get("content", "") for m in chat_history if m.get("role") == "user" and m.get("content", "").strip() != question.strip()]
+    if not previous:
+        return question
+    return previous[-1] + "\nFollow-up: " + question
+
+
+def _get_lexical_index(docstore, index_to_docstore_id):
+    # Cache based on docstore identity; loaded from disk on every request, so
+    # index version fingerprint uses doc ids and length, avoiding a rebuild per call.
+    ids = tuple(index_to_docstore_id[i] for i in sorted(index_to_docstore_id))
+    fingerprint = hashlib.sha1((str(len(ids)) + "|" + "|".join(ids)).encode()).hexdigest()
+    if fingerprint in _RETRIEVAL_CACHE:
+        return _RETRIEVAL_CACHE[fingerprint]
+    docs = [docstore.search(doc_id) for doc_id in ids]
+    texts = [getattr(d, "page_content", "") for d in docs]
+    vectorizer = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True, stop_words="english", max_features=150000)
+    matrix = vectorizer.fit_transform(texts)
+    _RETRIEVAL_CACHE.clear()
+    _RETRIEVAL_CACHE[fingerprint] = (ids, docs, vectorizer, matrix)
+    return _RETRIEVAL_CACHE[fingerprint]
+
+
+def _passage_score(query, doc, base_score):
+    """Generic factual evidence scoring, including table-like source passages."""
+    body = doc.page_content or ""
+    metadata = doc.metadata or {}
+    source = " ".join(str(x) for x in [metadata.get("source_url", ""), *(metadata.get("source_urls") or [])])
+    q_terms = set(_tokens(query))
+    text_terms = set(_tokens(body))
+    source_terms = set(_tokens(source.replace("-", " ").replace("_", " ")))
+    overlap = len(q_terms & text_terms) / max(1, len(q_terms))
+    source_overlap = len(q_terms & source_terms) / max(1, len(q_terms))
+    # Multiple number/value rows are strong evidence for comparison/superlative queries.
+    lines = [x.strip() for x in body.splitlines() if x.strip()]
+    fact_rows = sum(bool(re.search(r"\d+(?:\.\d+)?\s*%", line)) and
+                    bool(re.search(r"\b\d+\s*(?:days?|months?|years?)\b", line, re.I))
+                    for line in lines)
+    numeric_question = bool(re.search(r"\b(maximum|minimum|highest|lowest|best|exact|rate|price|cost|tenure|duration|period)\b", query, re.I))
+    # Avoid giving a general overview priority over an exact schedule with multiple rows.
+    table_bonus = min(fact_rows, 6) * 0.075 if numeric_question else 0
+    has_facts = bool(re.search(r"\d+(?:\.\d+)?\s*%", body))
+    # Long pages can contain every keyword incidentally; weight the source title too.
+    return (base_score * 2.5 + overlap * 0.14 + source_overlap * 0.15 + table_bonus
+            + (0.035 if numeric_question and has_facts else 0))
+
+
+def _hybrid_documents(question, history, embedding_model, index, docstore, mapping, top_k):
+    query = _retrieval_query(question, history)
+    ids, docs, vectorizer, matrix = _get_lexical_index(docstore, mapping)
+    # Search both the complete question and its main subject. Generic query
+    # relaxation prevents modifiers (age/category/max/exact) from drowning out
+    # the actual source schedule or specification table.
+    relaxed = re.sub(
+        r"\b(maximum|minimum|highest|lowest|exact|eligible|eligibility|senior|citizens?|"
+        r"how|much|many|tenure|duration|period|interest|rate|rates|can|get|for|the|a|an|"
+        r"what|which|is|are|and|on|of|to|i|my)\b", " ", query, flags=re.I
+    )
+    relaxed = " ".join(relaxed.split())
+    queries = [query] + ([relaxed] if len(relaxed) >= 5 else [])
+    candidate_count = min(len(ids), max(180, top_k * 40))
+    fused = Counter()
+    for variant in queries:
+        lexical = (matrix @ vectorizer.transform([variant]).T).toarray().ravel()
+        positions = np.argsort(-lexical)[:candidate_count]
+        for rank, pos in enumerate(positions):
+            if lexical[pos] > 0:
+                fused[int(pos)] += 1 / (40 + rank)
+        emb = np.asarray([embedding_model.embed_query(variant)], dtype="float32")
+        _, indices = index.search(emb, candidate_count)
+        for rank, pos in enumerate(indices[0]):
+            if pos >= 0:
+                fused[int(pos)] += 1 / (40 + rank)
+
+    scored = sorted(
+        ((_passage_score(query, docs[pos], base), pos)
+         for pos, base in fused.items() if 0 <= pos < len(docs)),
+        reverse=True,
+    )
+    selected, seen = [], set()
+    for score, pos in scored:
+        doc = docs[pos]
+        digest = hashlib.sha1(" ".join(doc.page_content.lower().split()).encode()).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        selected.append(doc)
+        if len(selected) >= top_k:
+            break
+    print(f"[HYBRID] Query: {query!r} | relaxed: {relaxed!r} | candidates: {len(fused)} | selected: {len(selected)}")
+    for n, doc in enumerate(selected, 1):
+        print(f"[HYBRID] {n} {doc.metadata} {doc.page_content[:600]!r}")
+    return selected
+
+
+def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024, top_k=8, temperature=0.3):
     try:
-        query_embedding = embedding_model_global.embed_query(question)
-        k = top_k
-        D, I = index.search(np.array([query_embedding]), k=k)
-        print(f"[FAISS] Top {k} indices: {I[0]}")
-
-        contexts = []
-        # Deduped list of URLs to cite after the answer. Two sources feed this:
-        #   - scraped web pages: a single URL under metadata["source_url"]
-        #   - uploaded PDFs/DOCX: zero or more URLs found in the doc text,
-        #     under metadata["source_urls"] (see preprocess.py _extract_urls)
-        web_sources = []
-        for faiss_idx in I[0]:
-            if faiss_idx != -1:
-                docstore_id = index_to_docstore_id.get(faiss_idx)
-                if docstore_id:
-                    doc = docstore.search(docstore_id)
-                    if hasattr(doc, "page_content"):
-                        contexts.append(doc.page_content)
-                        metadata = getattr(doc, "metadata", None) or {}
-
-                        if metadata.get("source_type") == "web":
-                            url = metadata.get("source_url")
-                            if url and url not in web_sources:
-                                web_sources.append(url)
-
-                        # NEW: uploaded-document chunks (PDF/DOCX) can carry
-                        # their own embedded URLs — cite those the same way.
-                        for url in metadata.get("source_urls") or []:
-                            if url and url not in web_sources:
-                                web_sources.append(url)
-
-        if not contexts:
-            print("[FAISS] No documents found in retrieved indices.")
+        docs = _hybrid_documents(question, chat_history, embedding_model_global, index, docstore, index_to_docstore_id, max(3, int(top_k)))
+        if not docs:
             return "No relevant context found in the documents."
-        
-        print("[FAISS] Retrieved documents:")
-        for doc in contexts:
-            print(" -", doc[:200], "...")  # Truncate to avoid log flooding
-        print(f"[FAISS] Web sources among retrieved chunks: {web_sources}")
-
+        contexts, urls = [], []
+        for n, doc in enumerate(docs, 1):
+            meta = doc.metadata or {}
+            sources = ([meta.get("source_url")] if meta.get("source_url") else []) + list(meta.get("source_urls") or [])
+            sources = [u for u in sources if u and _valid_source(u)]
+            for url in sources:
+                if url not in urls:
+                    urls.append(url)
+            contexts.append(f"[Evidence {n}] Source: {sources[0] if sources else meta.get('source_name', 'uploaded document')}\n{doc.page_content}")
+        # Assistant messages can be inaccurate; do not present them as factual evidence.
+        safe_history = [m for m in chat_history if m.get("role") == "user"]
         context = "\n\n---\n\n".join(contexts)
-        answer = run_chat_model(chat_model, context, question, chat_history, custom_instructions, max_output_tokens=max_output_tokens, temperature=temperature)
-        return append_web_sources(answer, web_sources, question=question, docstore=docstore)
+        evidence_rules = """
+EVIDENCE VERIFICATION (mandatory):
+- The retrieved passages are the ONLY authority for factual claims. Earlier assistant replies are not evidence.
+- Identify every requested attribute and its qualifying condition (e.g. maximum value AND the exact interval where it applies).
+- Never substitute the entire available range for the interval attached to a maximum value.
+- Do not mix figures or conditions from different products, customer categories, dates or table rows.
+- When an exact answer is absent from evidence, explicitly say that specific detail is unavailable; answer other supported parts.
+- Prefer specific tables, schedules, specifications and explicit factual statements over general marketing descriptions.
+- A stated maximum value must be tied to the exact condition/row where it applies. A general allowable range is NOT that condition.
+- If a category-specific value is defined by a documented base value plus a documented increment, calculate it only when both apply to the same product, date and conditions; otherwise do not infer it.
+- Distinguish a nominal rate from a yield or promotional maximum. Never treat them as interchangeable.
+- If passages conflict, say so rather than guessing.
+"""
+        answer = run_chat_model(chat_model, context, question, safe_history, evidence_rules + "\n" + (custom_instructions or ""), max_output_tokens=max_output_tokens, temperature=temperature)
+        return append_web_sources(answer, urls, question=question)
     except Exception as e:
-        print(f"[FAISS ERROR] {str(e)}")
+        print(f"[FAISS ERROR] {e}")
         return "An error occurred while processing your question."
-    
+
+
 # --- Simplified function for Optuna tuning ---
 def get_response(question, top_k=3, temperature=0.3, max_output_tokens=1024, custom_docs=None):
     print("[get_response] Called from Optuna tuning")
