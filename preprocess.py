@@ -189,7 +189,8 @@ def _append_document_chunks(output_docs, text_splitter, text, base_metadata, url
             continue
 
         metadata = dict(base_metadata)
-
+        if len(urls) == 1:
+            metadata["source_url"] = urls[0]
         # Prefer URLs actually present in this chunk. If the logical section has
         # exactly one source URL, it is safe to inherit it for all child chunks.
         # If a section has multiple URLs and this chunk contains none of them, do
@@ -205,58 +206,123 @@ def _append_document_chunks(output_docs, text_splitter, text, base_metadata, url
         output_docs.append(LangchainDocument(page_content=chunk, metadata=metadata))
 
 
+
 def _build_docx_sections(docx):
-    """Build logical DOCX sections with local URL ownership.
-
-    A paragraph containing a URL/hyperlink starts a new source section. Text that
-    follows belongs to that section until another URL-bearing paragraph appears.
-    This works well for exported/crawled documents of the form `URL -> content`,
-    while also preventing a normal DOCX with many unrelated links from assigning
-    every link to every chunk.
-
-    For a DOCX with only one URL in the whole file, all text is treated as one
-    source section and may safely inherit that single URL.
     """
-    paragraphs = []
-    for para in docx.paragraphs:
-        text = para.text.strip()
-        urls = _docx_paragraph_urls(para)
-        if text or urls:
-            paragraphs.append((text, urls))
+    Supports:
+    1. Structured crawled DOCX:
+       1. https://example.com/page
+       Full Text
+       ...
+       Table Summaries
+       ...
 
-    all_urls = _dedupe_urls([u for _, urls in paragraphs for u in urls])
+    2. Existing generic DOCX behavior.
+    """
+
+    heading_pattern = re.compile(
+        r"^\s*\d+\.\s+(https?://\S+)\s*$",
+        re.IGNORECASE
+    )
+
+    paragraphs = [
+        (p.text.strip(), _docx_paragraph_urls(p))
+        for p in docx.paragraphs
+    ]
+
+    # Detect the special numbered-URL export format.
+    has_numbered_url_sections = any(
+        heading_pattern.fullmatch(text)
+        for text, _ in paragraphs
+    )
+
+    if has_numbered_url_sections:
+        sections = []
+        current_url = None
+        current_lines = []
+        mode = None
+
+        def flush():
+            if current_url and current_lines:
+                content = "\n".join(current_lines).strip()
+                if content:
+                    sections.append((content, [current_url]))
+
+        for text, _ in paragraphs:
+            match = heading_pattern.fullmatch(text)
+
+            if match:
+                flush()
+                from metadata_router import normalize_url
+                current_url = normalize_url(match.group(1))
+                current_lines = []
+                mode = None
+                continue
+
+            if not current_url or not text:
+                continue
+
+            if text == "Full Text":
+                mode = "full_text"
+                continue
+
+            if text == "Table Summaries":
+                mode = "table_summaries"
+                continue
+
+            if text.startswith("Words:") and "Tables:" in text:
+                continue
+
+            if mode in ("full_text", "table_summaries"):
+                current_lines.append(text)
+
+        flush()
+
+        print(
+            f"[DOCX] Structured export detected: "
+            f"{len(sections)} URL-owned sections."
+        )
+        return sections
+
+    # Fallback: preserve existing behavior for normal DOCX uploads.
+    all_urls = _dedupe_urls(
+        [u for _, urls in paragraphs for u in urls]
+    )
 
     if len(all_urls) <= 1:
-        full_text = "\n\n".join(text for text, _ in paragraphs if text).strip()
-        return [(full_text, all_urls)] if full_text else []
+        text = "\n\n".join(
+            t for t, _ in paragraphs if t
+        ).strip()
+        return [(text, all_urls)] if text else []
 
     sections = []
     current_lines = []
     current_urls = []
 
-    def flush():
+    def flush_generic():
         nonlocal current_lines, current_urls
-        text = "\n\n".join(x for x in current_lines if x).strip()
+
+        text = "\n\n".join(current_lines).strip()
         if text:
-            sections.append((text, _dedupe_urls(current_urls)))
+            sections.append((
+                text,
+                _dedupe_urls(current_urls)
+            ))
+
         current_lines = []
         current_urls = []
 
-    for text, para_urls in paragraphs:
-        if para_urls:
-            # A new URL-bearing paragraph is a source boundary. This is the key
-            # difference from the old implementation, which put ALL document URLs
-            # in one metadata list before chunking.
-            flush()
-            current_urls = para_urls
+    for text, urls in paragraphs:
+        if urls:
+            flush_generic()
+            current_urls = urls
             if text:
                 current_lines.append(text)
         elif text:
             current_lines.append(text)
 
-    flush()
+    flush_generic()
     return sections
-
 
 # Preprocess uploaded files + scraped data into text chunks
 async def preprocess_text(files: list[Union[str, 'UploadFile']], size, overlap, scraped_data=None):

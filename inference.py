@@ -514,6 +514,197 @@ def _hybrid_documents(question, history, embedding_model, index, docstore, mappi
     return selected
 
 
+def _document_source_urls(doc):
+    metadata = doc.metadata or {}
+
+    urls = []
+    if metadata.get("source_url"):
+        urls.append(metadata["source_url"])
+
+    urls.extend(metadata.get("source_urls") or [])
+
+    from metadata_router import normalize_url
+
+    return {
+        normalize_url(url)
+        for url in urls
+        if url and _valid_source(url)
+    }
+
+
+def indexed_source_urls(docstore):
+    """Return the exact set of source URLs with indexed evidence."""
+    urls = set()
+    for doc in docstore._dict.values():
+        urls.update(_document_source_urls(doc))
+    return urls
+
+
+# Cache TF-IDF document matrices per FAISS/docstore instance and selected URL set.
+# The FAISS index itself is cached in main.py, so this cache survives requests.
+from collections import OrderedDict
+_URL_LEXICAL_CACHE = OrderedDict()
+_URL_LEXICAL_CACHE_MAX = 24
+
+
+def _filtered_url_documents(
+    question, embedding_model, docstore, selected_urls, top_k=8,
+    index=None, index_to_docstore_id=None
+):
+    """Rank ONLY indexed chunks from selected URLs, reusing FAISS vectors."""
+    from metadata_router import normalize_url
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    allowed = frozenset(normalize_url(u) for u in selected_urls)
+    if not allowed:
+        return []
+
+    # Map the existing FAISS row numbers back to documents.
+    mapping = index_to_docstore_id or {}
+    if index is not None and mapping:
+        pairs = [(row, docstore._dict[doc_id])
+                 for row, doc_id in mapping.items()
+                 if doc_id in docstore._dict and
+                 _document_source_urls(docstore._dict[doc_id]) & allowed]
+    else:
+        pairs = [(None, doc) for doc in docstore._dict.values()
+                 if _document_source_urls(doc) & allowed]
+    if not pairs:
+        return []
+
+    rows, candidates = zip(*pairs)
+    texts = [doc.page_content for doc in candidates]
+    key = (id(docstore), allowed)
+    cached = _URL_LEXICAL_CACHE.get(key)
+    if cached is None:
+        vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), sublinear_tf=True)
+        document_matrix = vectorizer.fit_transform(texts)
+        cached = (vectorizer, document_matrix)
+        _URL_LEXICAL_CACHE[key] = cached
+        if len(_URL_LEXICAL_CACHE) > _URL_LEXICAL_CACHE_MAX:
+            _URL_LEXICAL_CACHE.popitem(last=False)
+    else:
+        _URL_LEXICAL_CACHE.move_to_end(key)
+    vectorizer, document_matrix = cached
+    lexical = cosine_similarity(vectorizer.transform([question]), document_matrix).ravel()
+
+    query_embedding = np.asarray(embedding_model.embed_query(question), dtype=np.float32).reshape(1, -1)
+    if index is not None and all(row is not None for row in rows):
+        # No embed_documents() call: reconstruct the already indexed vectors.
+        try:
+            document_embeddings = np.stack([index.reconstruct(int(row)) for row in rows])
+        except (RuntimeError, AttributeError, ValueError):
+            document_embeddings = np.asarray(embedding_model.embed_documents(texts), dtype=np.float32)
+    else:
+        document_embeddings = np.asarray(embedding_model.embed_documents(texts), dtype=np.float32)
+
+    semantic = cosine_similarity(query_embedding, document_embeddings).ravel()
+    scores = 0.4 * lexical + 0.6 * semantic
+    selected, seen = [], set()
+    for pos in np.argsort(-scores):
+        doc = candidates[int(pos)]
+        digest = hashlib.sha1(" ".join(doc.page_content.lower().split()).encode()).hexdigest()
+        if digest in seen:
+            continue
+        seen.add(digest)
+        selected.append(doc)
+        if len(selected) >= top_k:
+            break
+    return selected
+
+
+def inference_selected_urls(
+    chat_model,
+    question,
+    embedding_model,
+    docstore,
+    selected_urls,
+    chat_history,
+    custom_instructions=None,
+    max_output_tokens=1024,
+    top_k=8,
+    temperature=0.3,
+    index=None,
+    index_to_docstore_id=None
+):
+    docs = _filtered_url_documents(
+        question=question,
+        embedding_model=embedding_model,
+        docstore=docstore,
+        selected_urls=selected_urls,
+        top_k=max(3, int(top_k)),
+        index=index,
+        index_to_docstore_id=index_to_docstore_id
+    )
+
+    if not docs:
+        return (
+            "I couldn't find relevant source content "
+            "for this question."
+        )
+
+    context_parts = []
+    evidence_urls = []
+
+    for i, doc in enumerate(docs, 1):
+        urls = sorted(
+            _document_source_urls(doc) & set(
+                __import__("metadata_router").normalize_url(u)
+                for u in selected_urls
+            )
+        )
+
+        source = urls[0] if urls else "uploaded document"
+
+        context_parts.append(
+            f"[Evidence {i}]\n"
+            f"Source: {source}\n"
+            f"{doc.page_content}"
+        )
+
+        if source.startswith(("http://", "https://")):
+            if source not in evidence_urls:
+                evidence_urls.append(source)
+
+    context = "\n\n---\n\n".join(context_parts)
+
+    strict_rules = """
+SOURCE RESTRICTIONS:
+- Answer only using the retrieved evidence passages.
+- The evidence comes from explicitly selected source URLs.
+- Never use facts from unrelated products or product variants.
+- Do not invent interest rates, amounts, eligibility or terms.
+- For rates, retain the exact tenure, customer type and conditions.
+- If evidence is insufficient, say the detail is unavailable.
+- Earlier assistant messages are not factual evidence.
+- Do not invent citations.
+"""
+
+    safe_history = [
+        msg for msg in chat_history
+        if msg.get("role") == "user"
+    ]
+
+    answer = run_chat_model(
+        chat_model=chat_model,
+        context=context,
+        question=question,
+        chat_history=safe_history,
+        custom_instructions=(
+            strict_rules + "\n" + (custom_instructions or "")
+        ),
+        max_output_tokens=max_output_tokens,
+        temperature=temperature
+    )
+
+    return append_web_sources(
+        answer,
+        evidence_urls,
+        question=question
+    )
+
+
 def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024, top_k=8, temperature=0.3):
     try:
         docs = _hybrid_documents(question, chat_history, embedding_model_global, index, docstore, index_to_docstore_id, max(3, int(top_k)))

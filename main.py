@@ -1,6 +1,7 @@
 # main.py
-
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request
+from pathlib import Path
+from metadata_router import load_metadata, distinct_products
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request, Header
 from typing import List, Optional
 from preprocess import preprocess_vectordbs
 from inference import inference
@@ -10,14 +11,30 @@ import os, json, validators, pickle
 import tldextract
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from dotenv import load_dotenv
 from datetime import datetime
 import sqlite3
+import threading
+import uuid
+import re
+import hmac
 
-load_dotenv()
+from metadata_router import (
+    load_metadata,
+    route_question,
+    rank_metadata_urls,
+    select_urls_with_llm,
+)
+
+from inference import inference_selected_urls, indexed_source_urls
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
+
+print("Theme admin key configured:", bool(os.getenv("THEME_ADMIN_KEY")))
 
 app = FastAPI()
 
@@ -83,6 +100,9 @@ session_state = {
     "messages": []
 }
 
+conversation_states = {}
+conversation_lock = threading.Lock()
+
 # ------------------------ 🔧 Helper to Rebuild FAISS Retriever ------------------------ #
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import SentenceTransformerEmbeddings
@@ -127,6 +147,7 @@ async def preprocess(
     request: Request,
     project_name: str = Form(None),
     doc_files: Optional[List[UploadFile]] = File(None),
+    metadata_file: Optional[UploadFile] = File(None),
     links: Optional[str] = Form(None),
     embedding_model: str = Form(...),
     chunk_size: int = Form(...),
@@ -175,6 +196,58 @@ async def preprocess(
         domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
         os.makedirs(domain_folder, exist_ok=True)
         print(f"📁 [PREPROCESS] ➤ Created/using domain folder: {domain_folder}")
+        
+        metadata_stats = None
+        metadata_temp_path = None
+
+        if metadata_file is not None:
+            if not metadata_file.filename.lower().endswith(".json"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Metadata must be a JSON file."
+                )
+
+            raw_metadata = await metadata_file.read()
+
+            if len(raw_metadata) > 25 * 1024 * 1024:
+                raise HTTPException(
+                    status_code=413,
+                    detail="Metadata JSON exceeds the 25 MB limit."
+                )
+
+            metadata_temp_path = os.path.join(
+                domain_folder, "metadata.uploading.json"
+            )
+
+            try:
+                with open(metadata_temp_path, "wb") as f:
+                    f.write(raw_metadata)
+
+                metadata_records = load_metadata(
+                    metadata_temp_path
+                )
+
+                metadata_stats = {
+                    "total_urls": len(metadata_records),
+                    "distinct_products": len(
+                        distinct_products(metadata_records)
+                    )
+                }
+
+                print(
+                    "[METADATA] Validated:",
+                    metadata_stats
+                )
+
+            except (ValueError, json.JSONDecodeError, UnicodeError) as e:
+                if os.path.exists(metadata_temp_path):
+                    os.remove(metadata_temp_path)
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid metadata JSON: {e}"
+                )
+
 
                 # ✅ Scrape web data if links provided — but reuse existing scraped
         # data for this project if it was already scraped for these exact
@@ -242,6 +315,7 @@ async def preprocess(
             })
 
             state_to_save = session_state.copy()
+            state_to_save["embedding_model_name"] = embedding_model
             state_to_save.pop("retriever", None)
             state_to_save.pop("index", None)
             state_to_save.pop("docstore", None)
@@ -250,7 +324,19 @@ async def preprocess(
                 pickle.dump(state_to_save, f)
 
             print("💾 [STATE] ➤ Session state saved to:", domain_folder)
-            return {"message": f"Preprocessing completed and saved in {domain_folder}"}
+
+            if metadata_temp_path:
+                os.replace(
+                    metadata_temp_path,
+                    os.path.join(domain_folder, "metadata.json")
+                )
+
+            return {
+                "message": f"Preprocessing completed and saved in {domain_folder}",
+                "project_name": domain,
+                "metadata_enabled": metadata_stats is not None,
+                "metadata": metadata_stats
+            }
 
         except Exception as e:
             print(f"❌ [VECTORDB] ➤ Error in preprocess_vectordbs: {str(e)}")
@@ -342,10 +428,148 @@ async def select_chat_model(
 class ChatRequest(BaseModel):
     query: str
     project_name: str
+    conversation_id: Optional[str] = None
 
 from fastapi import FastAPI, Request, HTTPException
 from langdetect import detect
 from datetime import datetime
+
+
+from functools import lru_cache
+
+
+@lru_cache(maxsize=4)
+def _load_metadata_index(index_dir, model_name, faiss_mtime, pickle_mtime):
+    import faiss
+    from langchain_community.embeddings import SentenceTransformerEmbeddings
+    from langchain_community.vectorstores import FAISS
+
+    embeddings = SentenceTransformerEmbeddings(model_name=model_name)
+    index = faiss.read_index(os.path.join(index_dir, "index.faiss"))
+    with open(os.path.join(index_dir, "index.pkl"), "rb") as f:
+        stored = pickle.load(f)
+    vectorstore = FAISS(
+        embedding_function=embeddings,
+        index=index,
+        docstore=stored["docstore"],
+        index_to_docstore_id=stored["index_to_docstore_id"]
+    )
+    return embeddings, vectorstore
+
+
+def metadata_chat(
+    prompt,
+    domain,
+    conversation_id,
+    loaded_session,
+    faiss_index_dir,
+    metadata_path
+):
+    records = load_metadata(metadata_path)
+
+    state_key = (domain, conversation_id)
+
+    with conversation_lock:
+        state = dict(conversation_states.get(state_key, {}))
+
+    route = route_question(
+        question=prompt,
+        records=records,
+        conversation_state=state
+    )
+
+    # A newly selected product must not inherit another product's LLM history.
+    # Keep the current product and pending-question state, but reset history.
+    if (route["status"] == "ready"
+            and state.get("product")
+            and route.get("product") != state.get("product")):
+        route["state"] = dict(route["state"])
+        route["state"]["history"] = []
+        print("[ROUTER] Product switched:", state.get("product"), "->", route.get("product"))
+
+    with conversation_lock:
+        conversation_states[state_key] = route["state"]
+
+    if route["status"] != "ready":
+        return route["response"]
+
+    resolved_question = route["question"]
+    product = route["product"]
+
+    model_name = loaded_session.get("embedding_model_name", "all-MiniLM-L6-v2")
+    faiss_path = os.path.join(faiss_index_dir, "index.faiss")
+    pickle_path = os.path.join(faiss_index_dir, "index.pkl")
+    embeddings, vectorstore = _load_metadata_index(
+        faiss_index_dir, model_name,
+        os.stat(faiss_path).st_mtime_ns,
+        os.stat(pickle_path).st_mtime_ns
+    )
+    available_urls = indexed_source_urls(vectorstore.docstore)
+
+    candidates = rank_metadata_urls(
+        question=resolved_question,
+        product=product,
+        records=records,
+        embedding_model=embeddings,
+        limit=12,
+        indexed_urls=available_urls
+    )
+
+    if not candidates:
+        return (
+            "I couldn't find information for this product "
+            "in the available knowledge base."
+        )
+
+    selected_urls = select_urls_with_llm(
+        question=resolved_question,
+        product=product,
+        candidates=candidates,
+        chat_model=loaded_session.get(
+            "selected_chat_model"
+        )
+    )
+
+    if not selected_urls:
+        return (
+            "I couldn't identify a reliable source page "
+            "for this question."
+        )
+
+    print("[ROUTER] Product:", product)
+    print("[ROUTER] Selected URLs:", selected_urls)
+
+    history = route["state"].get("history", [])
+
+    answer = inference_selected_urls(
+        chat_model=loaded_session.get("selected_chat_model"),
+        question=resolved_question,
+        embedding_model=embeddings,
+        docstore=vectorstore.docstore,
+        selected_urls=selected_urls,
+        index=vectorstore.index,
+        index_to_docstore_id=vectorstore.index_to_docstore_id,
+        chat_history=history,
+        custom_instructions=loaded_session.get("custom_prompt"),
+        max_output_tokens=loaded_session.get(
+            "max_output_tokens", 1024
+        ),
+        top_k=loaded_session.get("top_k", 8),
+        temperature=loaded_session.get("temperature", 0.3)
+    )
+
+    with conversation_lock:
+        latest = conversation_states.get(state_key, {})
+        latest.setdefault("history", [])
+        latest["history"].extend([
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": answer}
+        ])
+        latest["history"] = latest["history"][-12:]
+        conversation_states[state_key] = latest
+
+    return answer
+
 
 @app.post("/chat")
 async def chat_with_bot(payload: ChatRequest, request: Request):
@@ -379,6 +603,42 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     except Exception as e:
         print(f"❌ [CHAT] ➤ Failed to load session state: {e}")
         raise HTTPException(status_code=500, detail="❌ Failed to load session state.")
+
+    metadata_path = os.path.join(
+        domain_folder, "metadata.json"
+    )
+
+    if os.path.isfile(metadata_path):
+        conversation_id = (
+            payload.conversation_id or str(uuid.uuid4())
+        )
+
+        faiss_index_dir = os.path.join(
+            domain_folder, "faiss_index"
+        )
+
+        try:
+            response = metadata_chat(
+                prompt=prompt,
+                domain=domain,
+                conversation_id=conversation_id,
+                loaded_session=loaded_session,
+                faiss_index_dir=faiss_index_dir,
+                metadata_path=metadata_path
+            )
+
+            return {
+                "response": response,
+                "language": detected_lang,
+                "conversation_id": conversation_id
+            }
+
+        except Exception as e:
+            print("[METADATA CHAT ERROR]", str(e))
+            raise HTTPException(
+                status_code=500,
+                detail="Metadata chat processing failed."
+            )
 
     messages = loaded_session.get("messages", [])
     embedding_model = loaded_session.get("embedding_model_global", None)
@@ -445,12 +705,65 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print(f"❌ [INFERENCE] ➤ Inference error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
 
+# Shared theme is stored per project, not in a browser.
+THEME_FIELDS = (
+    "primary", "secondary", "background", "surface", "input",
+    "userBubble", "botBubble", "text", "mutedText", "link"
+)
+
+
+def _safe_project_folder(project_name: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,150}", project_name or "") or project_name in (".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid project name")
+    return os.path.join(BASE_OUTPUT_DIR, project_name)
+
+
+class ThemeUpdate(BaseModel):
+    project_name: str
+    theme: dict
+
+
+@app.put("/project_theme")
+async def update_project_theme(
+    payload: ThemeUpdate,
+    x_theme_admin_key: Optional[str] = Header(default=None),
+):
+    expected_key = os.getenv("THEME_ADMIN_KEY")
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="THEME_ADMIN_KEY is not configured")
+    if not x_theme_admin_key or not hmac.compare_digest(x_theme_admin_key, expected_key):
+        raise HTTPException(status_code=403, detail="Unauthorized theme update")
+
+    project_dir = _safe_project_folder(payload.project_name)
+    if not os.path.isdir(project_dir):
+        raise HTTPException(status_code=404, detail="Project does not exist")
+
+    theme = payload.theme
+    if set(theme) != set(THEME_FIELDS) or any(
+        not isinstance(theme[key], str) or
+        not re.fullmatch(r"#[0-9a-fA-F]{6}", theme[key])
+        for key in THEME_FIELDS
+    ):
+        raise HTTPException(status_code=422, detail="Invalid theme colors")
+
+    destination = os.path.join(project_dir, "theme.json")
+    temporary = os.path.join(project_dir, f".theme-{uuid.uuid4().hex}.tmp")
+    try:
+        with open(temporary, "w", encoding="utf-8") as file:
+            json.dump(theme, file)
+        os.replace(temporary, destination)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    return {"status": "success", "theme": theme}
+
+
 @app.get("/get_config")
 async def get_config(project_name: str = "local_upload"):
     import os
     import pickle
 
-    domain_folder = os.path.join(BASE_OUTPUT_DIR, project_name)
+    domain_folder = _safe_project_folder(project_name)
     session_file = os.path.join(domain_folder, "session_state.pkl")
 
     if not os.path.exists(session_file):
@@ -468,7 +781,17 @@ async def get_config(project_name: str = "local_upload"):
             content={"error": f"Failed to read session state: {str(e)}"},
         )
 
+    saved_theme = None
+    theme_path = os.path.join(domain_folder, "theme.json")
+    if os.path.isfile(theme_path):
+        try:
+            with open(theme_path, "r", encoding="utf-8") as file:
+                saved_theme = json.load(file)
+        except (OSError, ValueError):
+            saved_theme = None
+
     return {
+        "theme": saved_theme,
         "chatbot_title": session_data.get("chatbot_title", "AI Chat Assistant"),
         "initial_message": session_data.get("initial_message", "Hello! 👋 How can I help you today?"),
         "custom_prompt": session_data.get("custom_prompt", ""),
