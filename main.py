@@ -26,6 +26,7 @@ from metadata_router import (
     load_metadata,
     route_question,
     rank_metadata_urls,
+    recommendation_candidates,
     select_urls_with_llm,
 )
 
@@ -478,23 +479,52 @@ def metadata_chat(
         conversation_state=state
     )
 
-    # A newly selected product must not inherit another product's LLM history.
-    # Keep the current product and pending-question state, but reset history.
-    if (route["status"] == "ready"
-            and state.get("product")
-            and route.get("product") != state.get("product")):
+    old_products = state.get("products") or ([state["product"]] if state.get("product") else [])
+    new_products = route.get("products", [])
+    if route["status"] in ("ready", "recommend") and old_products and set(old_products) != set(new_products):
         route["state"] = dict(route["state"])
         route["state"]["history"] = []
-        print("[ROUTER] Product switched:", state.get("product"), "->", route.get("product"))
+        print("[ROUTER] Products switched:", old_products, "->", new_products)
+    print("[ROUTER] Status:",route["status"],"Products:",new_products)
 
     with conversation_lock:
         conversation_states[state_key] = route["state"]
+
+    if route["status"] == "recommend":
+        from inference import inference_recommendation
+        model_name = loaded_session.get("embedding_model_name", "all-MiniLM-L6-v2")
+        faiss_path = os.path.join(faiss_index_dir, "index.faiss")
+        pickle_path = os.path.join(faiss_index_dir, "index.pkl")
+        embeddings, vectorstore = _load_metadata_index(
+            faiss_index_dir, model_name,
+            os.stat(faiss_path).st_mtime_ns, os.stat(pickle_path).st_mtime_ns)
+        indexed = indexed_source_urls(vectorstore.docstore)
+        candidates = recommendation_candidates(prompt, route["family"], records, indexed_urls=indexed)
+        print("[RECOMMEND] Candidates:", [(x['url'], x['product']) for x in candidates[:12]])
+        answer = inference_recommendation(
+            chat_model=loaded_session.get("selected_chat_model"),
+            question=prompt, candidates=candidates,
+            embedding_model=embeddings, docstore=vectorstore.docstore,
+            index=vectorstore.index,
+            index_to_docstore_id=vectorstore.index_to_docstore_id,
+            custom_instructions=loaded_session.get("custom_prompt"),
+            max_output_tokens=loaded_session.get("max_output_tokens", 1024),
+            top_k=loaded_session.get("top_k", 8),
+            temperature=loaded_session.get("temperature", 0.3))
+        with conversation_lock:
+            latest = conversation_states.get(state_key, {})
+            latest.setdefault("history", [])
+            latest["history"].extend([{"role":"user","content":prompt},
+                                       {"role":"assistant","content":answer}])
+            latest["history"] = latest["history"][-12:]
+            conversation_states[state_key] = latest
+        return answer
 
     if route["status"] != "ready":
         return route["response"]
 
     resolved_question = route["question"]
-    product = route["product"]
+    products = route.get("products") or [route["product"]]
 
     model_name = loaded_session.get("embedding_model_name", "all-MiniLM-L6-v2")
     faiss_path = os.path.join(faiss_index_dir, "index.faiss")
@@ -506,57 +536,56 @@ def metadata_chat(
     )
     available_urls = indexed_source_urls(vectorstore.docstore)
 
-    candidates = rank_metadata_urls(
-        question=resolved_question,
-        product=product,
-        records=records,
-        embedding_model=embeddings,
-        limit=12,
-        indexed_urls=available_urls
-    )
-
-    if not candidates:
-        return (
-            "I couldn't find information for this product "
-            "in the available knowledge base."
+    selected_by_product = {}
+    for product in products:
+        candidates = rank_metadata_urls(
+            question=resolved_question, product=product, records=records,
+            embedding_model=embeddings, limit=12, indexed_urls=available_urls
         )
-
-    selected_urls = select_urls_with_llm(
-        question=resolved_question,
-        product=product,
-        candidates=candidates,
-        chat_model=loaded_session.get(
-            "selected_chat_model"
+        if not candidates:
+            print("[ROUTER] No indexed candidates:", product)
+            continue
+        urls = select_urls_with_llm(
+            question=resolved_question, product=product, candidates=candidates,
+            chat_model=loaded_session.get("selected_chat_model")
         )
-    )
+        # If LLM rejects every URL, use the best ranked indexed page.
+        if not urls:
+            urls = [candidates[0]["url"]]
+        selected_by_product[product] = urls
+        print("[ROUTER] Product:", product, "Selected URLs:", urls)
 
-    if not selected_urls:
-        return (
-            "I couldn't identify a reliable source page "
-            "for this question."
-        )
-
-    print("[ROUTER] Product:", product)
-    print("[ROUTER] Selected URLs:", selected_urls)
+    if len(selected_by_product) != len(products):
+        missing = [p for p in products if p not in selected_by_product]
+        return "I couldn't find indexed source information for: " + ", ".join(missing)
 
     history = route["state"].get("history", [])
-
-    answer = inference_selected_urls(
-        chat_model=loaded_session.get("selected_chat_model"),
-        question=resolved_question,
-        embedding_model=embeddings,
-        docstore=vectorstore.docstore,
-        selected_urls=selected_urls,
-        index=vectorstore.index,
-        index_to_docstore_id=vectorstore.index_to_docstore_id,
-        chat_history=history,
-        custom_instructions=loaded_session.get("custom_prompt"),
-        max_output_tokens=loaded_session.get(
-            "max_output_tokens", 1024
-        ),
-        top_k=loaded_session.get("top_k", 8),
-        temperature=loaded_session.get("temperature", 0.3)
-    )
+    if len(products) > 1:
+        from inference import inference_multiple_products
+        answer = inference_multiple_products(
+            chat_model=loaded_session.get("selected_chat_model"),
+            question=resolved_question, embedding_model=embeddings,
+            docstore=vectorstore.docstore, selected_by_product=selected_by_product,
+            index=vectorstore.index,
+            index_to_docstore_id=vectorstore.index_to_docstore_id,
+            chat_history=history, custom_instructions=loaded_session.get("custom_prompt"),
+            max_output_tokens=loaded_session.get("max_output_tokens", 1024),
+            top_k=loaded_session.get("top_k", 8),
+            temperature=loaded_session.get("temperature", 0.3)
+        )
+    else:
+        answer = inference_selected_urls(
+            chat_model=loaded_session.get("selected_chat_model"),
+            question=resolved_question, embedding_model=embeddings,
+            docstore=vectorstore.docstore,
+            selected_urls=selected_by_product[products[0]],
+            index=vectorstore.index,
+            index_to_docstore_id=vectorstore.index_to_docstore_id,
+            chat_history=history, custom_instructions=loaded_session.get("custom_prompt"),
+            max_output_tokens=loaded_session.get("max_output_tokens", 1024),
+            top_k=loaded_session.get("top_k", 8),
+            temperature=loaded_session.get("temperature", 0.3)
+        )
 
     with conversation_lock:
         latest = conversation_states.get(state_key, {})

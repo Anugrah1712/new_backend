@@ -29,6 +29,23 @@ def normalize_product(text):
     ).strip()
 
 
+# One canonical identifier for each product across routing, state and metadata.
+PRODUCT_CANONICAL_MAP = {
+    "fd": "fixed_deposit", "fds": "fixed_deposit",
+    "fixed_deposits": "fixed_deposit",
+    "term_deposit": "fixed_deposit", "term_deposits": "fixed_deposit",
+    "green_fd": "green_fixed_deposit",
+    "green_fixed_deposits": "green_fixed_deposit",
+    "bulk_fd": "bulk_fixed_deposit",
+    "bulk_fixed_deposits": "bulk_fixed_deposit",
+}
+
+
+def canonical_product(product):
+    key = normalize_product(product).replace(" ", "_")
+    return PRODUCT_CANONICAL_MAP.get(key, key)
+
+
 def load_metadata(path):
     with open(path, "r", encoding="utf-8") as f:
         records = json.load(f)
@@ -201,114 +218,178 @@ def is_product_clarification(question):
     ))
 
 
-def route_question(question, records, conversation_state=None):
-    """Resolve product and follow-ups before retrieval, asking on ambiguity.
+# Only verified/approved aliases should be added here. The spelling "Royal-E"
+# is treated as AU Royale Savings Account for this deployment; verify with the bank.
+PRODUCT_ALIASES = {
+    "royal e account": "au_royale_savings_account",
+    "royal e": "au_royale_savings_account",
+    "royale account": "au_royale_savings_account",
+    "ivy account": "au_ivy_savings_account",
+    "au ivy account": "au_ivy_savings_account",
+    "bulk fd": "bulk_fixed_deposit",
+    "fd": "fixed_deposit",
+    "fds": "fixed_deposit",
+    "green fd": "green_fixed_deposit",
+    "green fixed deposit": "green_fixed_deposit",
+    "fixed deposits": "fixed_deposit",
+    "term deposits": "fixed_deposit",
+}
 
-    Explicit product > current-family continuation > category clarification >
-    genuine contextual follow-up > general product clarification.
-    """
+
+def _find_products(question, products):
+    """Detect one or more products, treating canonical aliases as one product."""
+    q = normalize_product(question)
+    available = set(canonical_product(p) for p in products)
+    found, spans = [], []
+
+    def add_matches(alias, target):
+        alias = normalize_product(alias)
+        target = canonical_product(target)
+        if not alias or target not in available:
+            return
+        for match in re.finditer(r"(?<!\w)" + re.escape(alias) + r"(?!\w)", q):
+            b, e = match.span()
+            if not any(b < old_e and e > old_b for old_b, old_e in spans):
+                spans.append((b, e))
+                found.append(target)
+
+    # Longer aliases must take precedence (e.g. Green FD over FD).
+    for alias, target in sorted(PRODUCT_ALIASES.items(),
+                                key=lambda kv: -len(normalize_product(kv[0]))):
+        add_matches(alias, target)
+
+    for product in sorted(products, key=lambda p: -len(normalize_product(p))):
+        add_matches(product, product)
+
+    # Short forms only when they have one unique canonical owner.
+    alias_owners = {}
+    for product in products:
+        for alias in _aliases(product) - {normalize_product(product)}:
+            alias_owners.setdefault(alias, set()).add(canonical_product(product))
+    for alias in sorted(alias_owners, key=len, reverse=True):
+        owners = alias_owners[alias]
+        if len(alias) >= 3 and len(owners) == 1:
+            add_matches(alias, next(iter(owners)))
+    return list(dict.fromkeys(found))
+
+
+def _recommendation_intent(question):
+    q = normalize_product(question)
+    return bool(re.search(r"\b(best|recommend|suggest|suitable|which|looking for|need|want|zero balance|lifetime free|no annual fee)\b", q))
+
+
+def _recommendation_family(question):
+    q = normalize_product(question)
+    if re.search(r"\b(credit card|credit cards|cards?)\b", q):
+        return "card"
+    if re.search(r"\b(savings account|zero balance|student account)\b", q):
+        return "account"
+    return None
+
+
+def route_question(question, records, conversation_state=None):
     state = dict(conversation_state or {})
     products = distinct_products(records)
-    product, status = resolve_product(question, products)
-    previous = state.get("product")
+    detected = _find_products(question, products)
+    previous_raw = state.get("products") or ([state["product"]] if state.get("product") else [])
+    previous = list(dict.fromkeys(canonical_product(p) for p in previous_raw))
+    products = list(dict.fromkeys(canonical_product(p) for p in products))
     pending = state.get("pending_question")
     family = _requested_family(question)
-
-    # Generic family labels (e.g. "loan" or "account") are not specific
-    # products, even if the metadata includes a product with that exact name.
-    # Handle them BEFORE accepting resolve_product()'s matched result.
-    generic_labels = {
-        "loan": {"loan", "loans", "borrowing"},
-        "account": {"account", "accounts"},
-        "deposit": {"deposit", "deposits"},
-        "card": {"card", "cards"},
-    }
     q = normalize_product(question)
-    if family and any(_mentioned(q, label) for label in generic_labels[family]):
-        explicit_specific = (
-            status == "matched" and product is not None
-            and normalize_product(product) not in generic_labels[family]
-            and any(
-                _mentioned(q, alias)
-                for alias in _aliases(product)
-                if alias not in generic_labels[family]
-            )
-        )
-        if not explicit_specific:
-            family_products = [
-                p for p in products
-                if _product_family(p) == family
-                and normalize_product(p) not in generic_labels[family]
-            ]
-            # Only inherit context if it is a specific product in this family.
-            if previous in family_products and not pending:
-                return {"status": "ready", "product": previous,
-                        "question": question, "state": state}
-            if len(family_products) == 1:
-                selected = family_products[0]
-                state["product"] = selected
-                state["pending_question"] = None
-                return {"status": "ready", "product": selected,
-                        "question": question, "state": state}
-            state["product"] = None
-            options = _family_examples(family_products)
-            message = f"Which type of {family} are you interested in?"
-            if options:
-                message += f" For example: {options}."
-            return _clarify(question, state, message)
+    recommendation = _recommendation_intent(question)
+    rec_family = _recommendation_family(question)
+    print("[ROUTER DEBUG] Detected:", detected, "Previous:", previous, "Pending:", pending,
+          "Recommendation:", recommendation, "Family:", rec_family)
 
-    if status == "matched":
-        # Only combine a pending question if the reply is actually resolving it.
-        if (pending and len(normalize_product(question).split()) <= 5
-                and (not _requested_family(pending)
-                     or _requested_family(pending) == _product_family(product))):
-            full_question = pending + "\nProduct: " + product
-        else:
-            full_question = question
-        state["pending_question"] = None
-        state["product"] = product
-        return {"status": "ready", "product": product,
-                "question": full_question, "state": state}
+    # Generic product labels should not block discovery, nor be treated as
+    # a second product when the user asks for a recommendation.
+    generic = {"loan", "account", "deposit", "card", "credit_card", "savings_account"}
+    if recommendation and rec_family and not any(p not in generic and _product_family(p) == rec_family for p in detected):
+        state.update(product=None, products=[], pending_question=None)
+        return {"status": "recommend", "intent": "recommendation", "family": rec_family,
+                "products": [], "question": question, "state": state}
 
-    if status == "ambiguous":
-        return _clarify(question, state, "Which specific product do you mean?")
+    if detected:
+        # A clarification reply must not replace the actual pending question.
+        short_reply = len(q.split()) <= 5 and not re.search(
+            r"\b(what|how|why|compare|difference|differ|rate|interest|eligible|benefit)\b", q)
+        resolved = (pending + "\nProducts: " + ", ".join(detected)) if pending and short_reply else question
+        state.update(product=detected[0] if len(detected)==1 else None,
+                     products=detected, pending_question=None)
+        return {"status": "ready", "product": detected[0], "products": detected,
+                "intent": "comparison" if len(detected)>1 else "single",
+                "question": resolved, "state": state}
 
+    # A short alias clarification, including FD, retains the ORIGINAL question.
+    if pending and q in {"fd", "fds", "fixed deposit", "fixed deposits"} and "fixed_deposit" in products:
+        state.update(product="fixed_deposit", products=["fixed_deposit"], pending_question=None)
+        return {"status":"ready", "product":"fixed_deposit", "products":["fixed_deposit"],
+                "intent":"single", "question":pending + "\nProduct: fixed_deposit", "state":state}
+
+    # If a user is continuing a known product conversation, keep it.
+    # Never turn an interest-rate follow-up into a new clarification.
+    if previous and len(previous)==1 and not pending and not family and _looks_like_followup(question):
+        state.update(product=previous[0], products=previous)
+        return {"status":"ready", "product":previous[0], "products":previous,
+                "intent":"single", "question":question, "state":state}
+
+    # Generic family question: clarify only when no relevant product context.
     if family:
-        family_products = [p for p in products if _product_family(p) == family]
-        # Follow-up within the same family can retain the previous selection.
-        if previous in family_products and not pending:
-            return {"status": "ready", "product": previous,
-                    "question": question, "state": state}
-        if len(family_products) == 1:
-            selected = family_products[0]
-            state["product"] = selected
-            state["pending_question"] = None
-            return {"status": "ready", "product": selected,
-                    "question": question, "state": state}
-        if len(family_products) > 1:
-            # Show actual products from the uploaded metadata, not invented names.
-            options = _family_examples(family_products)
-            return _clarify(question, state,
-                f"Which {family} product are you referring to? For example: {options}.")
-        return _clarify(question, state,
-            f"Which specific {family} product are you referring to?")
+        options=[p for p in products if _product_family(p)==family and normalize_product(p) not in
+                 {"loan","loans","account","accounts","deposit","deposits","card","cards"}]
+        if previous and len(previous)==1 and previous[0] in options and not pending:
+            state.update(product=previous[0], products=previous, pending_question=None)
+            return {"status":"ready", "product":previous[0], "products":previous,
+                    "intent":"single", "question":question, "state":state}
+        state.update(product=None, products=[], pending_question=pending or question)
+        return {"status":"clarify", "response":f"Which type of {family} are you interested in? For example: {_family_examples(options)}.", "state":state}
 
-    # If the bot asked for a product and the reply did not match metadata,
-    # keep asking rather than silently falling back to an old product.
+    # A new substantive question supersedes an unresolved clarification.
+    if pending and (len(q.split())>5 or re.search(r"\b(what|how|why|compare|difference|differ)\b",q)):
+        pending=None;state["pending_question"]=None
     if pending:
-        return _clarify(pending, state,
-            "Please specify the product name so I can answer accurately.")
-
+        return {"status":"clarify", "response":"Please specify the product name so I can answer accurately.", "state":state}
     if previous and _looks_like_followup(question):
-        return {"status": "ready", "product": previous,
-                "question": question, "state": state}
-
+        state.update(products=previous,product=previous[0] if len(previous)==1 else None)
+        return {"status":"ready", "product":previous[0], "products":previous,
+                "intent":"comparison" if len(previous)>1 else "single",
+                "question":question, "state":state}
     if is_product_clarification(question):
-        return _clarify(question, state, "Which product are you referring to?")
+        state.update(product=None,products=[],pending_question=question)
+        return {"status":"clarify","response":"Which product are you referring to?","state":state}
+    return {"status":"unsupported","response":"Sorry, I don't have information about that product in the available knowledge base.","state":state}
 
-    return {"status": "unsupported", "response": (
-        "Sorry, I don't have information about that product "
-        "in the available knowledge base."), "state": state}
+
+def recommendation_candidates(question, family, records, indexed_urls=None, limit=24):
+    """Discover real indexed product pages, not just broad explainer blogs."""
+    available = {normalize_url(u) for u in indexed_urls} if indexed_urls is not None else None
+    q = normalize_product(question)
+    is_travel = bool(re.search(r"\b(travel|foreign|international|forex|abroad)\b",q))
+    is_free = bool(re.search(r"\b(lifetime free|no annual fee|zero annual fee|free credit card)\b",q))
+    is_zero = bool(re.search(r"\b(zero balance|no minimum balance|student)\b",q))
+    results=[]
+    for item in records:
+        if available is not None and normalize_url(item['url']) not in available:continue
+        url=item['url'].lower(); summary=normalize_product(item['summary']); names=' '.join(item['product']).lower()
+        if family=='card' and not ('credit_card' in names or 'credit-card' in url):continue
+        if family=='account' and not ('savings_account' in names or 'savings-account' in url):continue
+        score=0
+        if family=='card' and ('/credit-cards/' in url or '/credit-card/' in url):score+=3
+        if family=='account' and ('/savings-account/' in url or '/accounts/' in url):score+=3
+        if '/blogs/' in url:score-=5
+        if is_travel:
+            for token in ('ixigo','forex','travel','international','lounge','cross currency','zero forex'):
+                if token in (url+' '+summary+' '+names):score+=4 if token=='ixigo' else 1
+        if is_free:
+            for token in ('lifetime free','no annual fee','zero annual fee','lifetime_free'):
+                if token in (summary+' '+names):score+=5
+        if is_zero:
+            for token in ('zero balance','no minimum balance','student','zero_balance'):
+                if token in (summary+' '+names):score+=5
+        if score>0:results.append((score,item))
+    results.sort(key=lambda x:(-x[0],x[1]['url']))
+    return [item for _,item in results[:limit]]
 
 
 def rank_metadata_urls(question, product, records, embedding_model,
@@ -319,7 +400,8 @@ def rank_metadata_urls(question, product, records, embedding_model,
     )
     candidates = [
         item for item in records
-        if product in item["product"]
+        if any(canonical_product(p) == canonical_product(product)
+               for p in item["product"])
         and (available is None or normalize_url(item["url"]) in available)
     ]
 

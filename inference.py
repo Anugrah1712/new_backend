@@ -705,6 +705,96 @@ SOURCE RESTRICTIONS:
     )
 
 
+def inference_multiple_products(chat_model, question, embedding_model, docstore,
+                                selected_by_product, chat_history,
+                                custom_instructions=None, max_output_tokens=1024,
+                                top_k=8, temperature=0.3,
+                                index=None, index_to_docstore_id=None):
+    """Retrieve independently per product, then compare using labelled evidence."""
+    context_parts, evidence_urls = [], []
+    per_product_k = max(3, int(top_k) // max(1, len(selected_by_product)))
+    for product, urls in selected_by_product.items():
+        docs = _filtered_url_documents(
+            question=question + " " + product.replace("_", " "),
+            embedding_model=embedding_model, docstore=docstore,
+            selected_urls=urls, top_k=per_product_k,
+            index=index, index_to_docstore_id=index_to_docstore_id
+        )
+        if not docs:
+            context_parts.append(f"[Product: {product}] No indexed evidence found.")
+            continue
+        allowed = {__import__("metadata_router").normalize_url(u) for u in urls}
+        for doc in docs:
+            matched = sorted(_document_source_urls(doc) & allowed)
+            source = matched[0] if matched else "uploaded document"
+            context_parts.append(f"[Product: {product}]\nSource: {source}\n{doc.page_content}")
+            if source.startswith(("https://", "http://")) and source not in evidence_urls:
+                evidence_urls.append(source)
+    if not context_parts:
+        return "I couldn't find indexed information for the requested products."
+    rules = """
+MULTI-PRODUCT COMPARISON RULES:
+- Compare only the products named in the question using the labelled evidence.
+- Keep facts for each product separate; never transfer features, rates or eligibility.
+- State similarities and differences where supported by evidence.
+- If a requested detail is missing for either product, say it is unavailable.
+- Do not invent figures, conditions, URLs, or product equivalences.
+- Earlier assistant messages are not factual evidence.
+- Do not include markdown asterisks in the answer.
+- NEVER use Markdown tables or pipe characters. Use short plain-text paragraphs or bullets with one product per paragraph.
+- State the main differences in simple readable sentences.
+"""
+    answer = run_chat_model(
+        chat_model=chat_model, context="\n\n---\n\n".join(context_parts),
+        question=question,
+        chat_history=[m for m in chat_history if m.get("role") == "user"],
+        custom_instructions=rules + "\n" + (custom_instructions or ""),
+        max_output_tokens=max_output_tokens, temperature=temperature
+    )
+    return append_web_sources(answer, evidence_urls, question=question,
+                              max_sources=max(2, len(selected_by_product) * 2))
+
+
+def inference_recommendation(chat_model, question, candidates, embedding_model, docstore,
+                             index=None, index_to_docstore_id=None,
+                             custom_instructions=None, max_output_tokens=1024,
+                             top_k=8, temperature=0.3):
+    """Recommend only products supported by actual indexed source passages."""
+    if not candidates:
+        return "I couldn't verify a suitable product from the indexed information. Please check the bank's current product terms."
+    contexts=[]; sources=[]
+    # Keep a wider selection for discovery but enforce a bounded evidence budget.
+    for item in candidates[:12]:
+        docs = _filtered_url_documents(
+            question=question + " " + ' '.join(item['product']).replace('_',' '),
+            embedding_model=embedding_model, docstore=docstore,
+            selected_urls=[item['url']], top_k=2,
+            index=index, index_to_docstore_id=index_to_docstore_id)
+        for doc in docs[:2]:
+            contexts.append("Product labels: " + ', '.join(item['product']) +
+                            "\nSource: " + item['url'] + "\n" + doc.page_content[:2800])
+            if item['url'] not in sources:sources.append(item['url'])
+        if len(contexts)>=max(8, int(top_k)*2):break
+    if not contexts:
+        return "I couldn't verify a suitable product from the indexed information."
+    rules = """
+PRODUCT RECOMMENDATION RULES:
+- Answer the customer's use case directly. Recommend named products only when the retrieved passages support their suitability.
+- Use only retrieved evidence for eligibility, fees, rates, rewards, and benefits.
+- For international travel, compare forex charges, international acceptance and travel benefits where evidenced.
+- For lifetime-free cards, explicitly verify whether joining and annual fees are waived for life; a generic explainer blog is not evidence that a named card is free.
+- For student zero-balance accounts, explicitly verify zero-minimum-balance requirements and student eligibility; do not suggest a premium minimum-balance account as zero-balance.
+- If no matching product can be verified, say that clearly; do not invent a recommendation.
+- Do not output Markdown tables, pipe characters, or asterisks. Use concise paragraphs or simple bullets.
+- Do not manufacture or write URLs; sources will be attached automatically.
+"""
+    answer = run_chat_model(chat_model=chat_model, context="\n\n---\n\n".join(contexts),
+                            question=question, chat_history=[],
+                            custom_instructions=rules + "\n" + (custom_instructions or ""),
+                            max_output_tokens=max_output_tokens, temperature=temperature)
+    return append_web_sources(answer, sources, question=question, max_sources=3)
+
+
 def inference_faiss(chat_model, question, embedding_model_global, index, docstore, index_to_docstore_id, chat_history, custom_instructions=None, max_output_tokens=1024, top_k=8, temperature=0.3):
     try:
         docs = _hybrid_documents(question, chat_history, embedding_model_global, index, docstore, index_to_docstore_id, max(3, int(top_k)))
