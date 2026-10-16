@@ -71,7 +71,9 @@ origins = [
     os.getenv("LUCKPAY"),
     os.getenv("ANUWEB"),
     os.getenv("BAJAJ"),
-    os.getenv("DOMAIN3")
+    os.getenv("DOMAIN3"),
+    os.getenv("AUBANK1"),
+    os.getenv("AUBANK2")
 ]
 
 app.add_middleware(
