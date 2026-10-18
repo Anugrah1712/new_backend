@@ -525,3 +525,127 @@ Rules:
         return selected
     except (ValueError, TypeError, AttributeError):
         return []
+
+
+# Metadata-driven LLM routing. No fixed product alias/category table is used
+# for deciding intent, scope, or product. The selected chat model makes the decision.
+def route_question_llm(question, records, conversation_state=None, chat_model=None):
+    from inference import run_chat_model
+    state = dict(conversation_state or {})
+    if not chat_model:
+        raise ValueError("A selected chat model is required for metadata routing")
+
+    # Catalog is constructed dynamically from the uploaded metadata, including
+    # its own product identifiers and descriptive summaries.
+    catalog = {}
+    for record in records:
+        for product in record.get("product", []):
+            key = str(product).strip()
+            if key:
+                catalog.setdefault(key, [])
+                if len(catalog[key]) < 1:
+                    catalog[key].append(str(record.get("summary", ""))[:130])
+
+    catalog_text = json.dumps(
+        [{"id": key, "descriptions": descriptions}
+         for key, descriptions in catalog.items()], ensure_ascii=False)
+    recent_user_turns = [m.get("content", "") for m in state.get("history", [])
+                         if m.get("role") == "user"][-3:]
+    context = json.dumps({"products": json.loads(catalog_text),
+                          "previous_products": state.get("products", []),
+                          "recent_user_questions": recent_user_turns,
+                          "pending_question": state.get("pending_question")}, ensure_ascii=False)
+    rules = """You classify user queries for an AU Bank product/service chatbot.
+Return ONLY a JSON object, no prose or code fences:
+{"scope":"in_scope|out_of_scope|uncertain","intent":"single|comparison|recommendation|general|clarify", "products":[], "family":null, "explicit_product":false, "clarification":""}
+- Decide scope by meaning, not by whether a product identifier is explicitly mentioned.
+- In scope: AU Bank products/services, banking queries that can reasonably be answered
+  from the provided AU Bank knowledge base, and contextual follow-ups.
+- Out of scope: clearly unrelated topics such as sports, movies, recipes, coding, etc.
+- For out_of_scope set intent=general, products=[], and never ask for a product.
+- The product catalog is authoritative. Select only exact IDs from it; never invent IDs.
+- Understand synonyms, plural/singular, misspellings, Hindi, Hinglish, and other Indian languages.
+- Select multiple products for a comparison. Reuse previous products ONLY for genuine follow-ups.
+- For product recommendations set intent=recommendation and family to card/account/loan/deposit
+  when identifiable, even if no specific product was named.
+- An attribute or audience (e.g. senior citizens, students, women, salaried people)
+  is NOT itself a selected product. A question asking an interest rate, fee, eligibility,
+  tenure, or other product-specific value for an audience, without identifying the
+  banking product, MUST use intent=clarify, products=[], explicit_product=false.
+- Do NOT infer a savings account, FD, loan, or other product solely because one
+  catalog product contains that audience term. The presence of a catalog match
+  does not establish the user's intended product.
+- Set explicit_product=true ONLY if the user actually identifies a product or
+  clearly refers to an already established product in a genuine follow-up.
+- If a product-specific question has multiple plausible products and no product
+  is established, ask a brief choice-based clarification. Use actual relevant
+  product names from the catalog. Do not guess.
+- Broad questions about AU Bank's general services can use intent=general,
+  products=[], and need no clarification.
+- Do not ask for tenure when the user requests the full rate schedule; tenure
+  clarification is needed only when a single tenure-specific calculation requires it.
+- When pending_question exists, a short product reply resolves that pending question.
+  Classify the reply using the catalog and answer the combined original request.
+- Respond in the user's language when generating clarification text.
+"""
+    raw = run_chat_model(chat_model, context, question, [],
+                         custom_instructions=rules, max_output_tokens=450, temperature=0)
+    match = re.search(r"\{[\s\S]*\}", str(raw))
+    if not match:
+        raise ValueError("LLM router did not return valid JSON")
+    data = json.loads(match.group(0))
+    scope = data.get("scope")
+    intent = data.get("intent")
+    if scope not in {"in_scope", "out_of_scope", "uncertain"}:
+        raise ValueError("LLM router returned invalid scope")
+    if intent not in {"single", "comparison", "recommendation", "general", "clarify"}:
+        raise ValueError("LLM router returned invalid intent")
+    if scope == "out_of_scope":
+        state.update(pending_question=None)
+        return {"status":"out_of_scope", "state":state}
+    raw_products = data.get("products", [])
+    if not isinstance(raw_products, list):
+        raw_products = []
+    # Resolve IDs against metadata; canonical variants may be equivalent but
+    # are not used to classify the user query.
+    selected = []
+    for item in raw_products:
+        if not isinstance(item, str):
+            continue
+        if item in catalog:
+            chosen = item
+        else:
+            options = [p for p in catalog if canonical_product(p) == canonical_product(item)]
+            chosen = options[0] if len(options) == 1 else None
+        if chosen and chosen not in selected:
+            selected.append(chosen)
+    # Clarification must win over a speculative product ID. The model, not a
+    # hardcoded list of products/keywords, decides whether a product was specified.
+    if intent == "clarify" and scope == "in_scope":
+        message = str(data.get("clarification") or "Which AU Bank product or service do you mean?").strip()
+        state.update(products=[], product=None, pending_question=state.get("pending_question") or question)
+        return {"status":"clarify", "response":message, "state":state}
+    pending_question = state.get("pending_question")
+    if pending_question and selected and len(question.split()) <= 6:
+        resolved_question = pending_question + "\nProduct specified by user: " + question
+    else:
+        resolved_question = question
+    if intent == "recommendation":
+        family = data.get("family")
+        if family in {"card", "account", "loan", "deposit"}:
+            state.update(products=selected, product=selected[0] if len(selected)==1 else None,
+                         pending_question=None)
+            return {"status":"recommend", "intent":"recommendation", "family":family,
+                    "products":selected, "question":resolved_question, "state":state}
+    if selected:
+        state.update(products=selected, product=selected[0] if len(selected)==1 else None,
+                     pending_question=None)
+        return {"status":"ready", "intent":"comparison" if len(selected)>1 else "single",
+                "products":selected, "product":selected[0], "question":resolved_question, "state":state}
+    if intent == "clarify" and scope == "in_scope":
+        message = str(data.get("clarification") or "Could you clarify which AU Bank service you mean?").strip()
+        state["pending_question"] = question
+        return {"status":"clarify", "response":message, "state":state}
+    state.update(products=[], product=None, pending_question=None)
+    return {"status":"general", "intent":"general", "products":[],
+            "question":question, "state":state}

@@ -4,7 +4,7 @@ from metadata_router import load_metadata, distinct_products
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request, Header
 from typing import List, Optional
 from preprocess import preprocess_vectordbs
-from inference import inference
+from inference import inference, clean_customer_text, validate_greeting
 from webscrape import scrape_web_data
 import uvicorn
 import os, json, validators, pickle
@@ -24,7 +24,7 @@ import hmac
 
 from metadata_router import (
     load_metadata,
-    route_question,
+    route_question_llm,
     rank_metadata_urls,
     recommendation_candidates,
     select_urls_with_llm,
@@ -460,25 +460,82 @@ def _load_metadata_index(index_dir, model_name, faiss_mtime, pickle_mtime):
     return embeddings, vectorstore
 
 
+def run_scope_reply(question, chat_model, language_instruction):
+    from inference import run_chat_model
+    return run_chat_model(
+        chat_model=chat_model, context="", question=question, chat_history=[],
+        custom_instructions=(
+            "This question is outside the AU Bank chatbot's scope. "
+            "Reply briefly and politely that you can help with AU Bank products "
+            "and services, such as accounts, deposits, loans, and cards. "
+            "Do not answer the unrelated question. Do not ask which product "
+            "the user means. " + language_instruction),
+        max_output_tokens=120, temperature=0)
+
+
+def retrieval_query_in_english(question, chat_model):
+    """Semantic query rewrite only; never replace the customer's original wording."""
+    from inference import run_chat_model
+    # A single selected-model call for translation and retrieval normalization.
+    try:
+        result = run_chat_model(
+            chat_model=chat_model, context="", question=question, chat_history=[],
+            custom_instructions=(
+                "TASK: Translate/rewrite the USER QUESTION into a short, precise English "
+                "banking search query. Preserve all product names, conditions, customer "
+                "types, amounts, tenure, and the exact intent. Translate Gujarati, Hindi, "
+                "Hinglish and any other language. Output ONLY the English search query; "
+                "no explanations, no answers, no quotes, no markdown."
+            ), max_output_tokens=180, temperature=0)
+        result = str(result).strip().strip('\"')
+        if result and len(result) < 600 and not result.startswith('{'):
+            return result
+    except Exception as exc:
+        print('[MULTILINGUAL] Query rewrite failed; using original:', exc)
+    return question
+
+
+def answer_language_instruction(language_code, original_question):
+    """Per-turn output language; never infer it from retrieved text or prior replies."""
+    names = {"en": "English", "hi": "Hindi", "gu": "Gujarati", "mr": "Marathi", "ta": "Tamil", "te": "Telugu", "bn": "Bengali", "pa": "Punjabi", "kn": "Kannada", "ml": "Malayalam", "ur": "Urdu"}
+    target = names.get(language_code, language_code or "English")
+    return (
+        "MANDATORY OUTPUT LANGUAGE FOR THIS TURN: " + target + ". "
+        "Respond entirely in this language, using its normal script. "
+        "For English input, respond ONLY in English, even if earlier messages, retrieved documents, "
+        "or developer instructions contain Hindi. Do not switch languages mid-conversation. "
+        "For romanized Hindi/Hinglish, preserve the user's romanized style where appropriate. "
+        "The original user's message is: " + repr(original_question) + ". "
+        "Use the original message, NOT the rewritten English search query, to decide output language. "
+        "Give all evidence-supported details directly. When relevant information is partial and related "
+        "source links will be provided, finish with 'Please refer to the related search results below for more information.' "
+        "Translate that closing sentence into the required output language. "
+        "Do not add generic statements that other information is unavailable, unless an essential "
+        "specifically requested fact is truly unsupported. Never invent missing details."
+    )
+
+
 def metadata_chat(
     prompt,
     domain,
     conversation_id,
     loaded_session,
     faiss_index_dir,
-    metadata_path
+    metadata_path,
+    response_language="en",
+    original_question=None
 ):
     records = load_metadata(metadata_path)
+    answer_instructions = (loaded_session.get("custom_prompt") or "") + "\n" + answer_language_instruction(response_language, original_question or prompt)
 
     state_key = (domain, conversation_id)
 
     with conversation_lock:
         state = dict(conversation_states.get(state_key, {}))
 
-    route = route_question(
-        question=prompt,
-        records=records,
-        conversation_state=state
+    route = route_question_llm(
+        question=prompt, records=records, conversation_state=state,
+        chat_model=loaded_session.get("selected_chat_model")
     )
 
     old_products = state.get("products") or ([state["product"]] if state.get("product") else [])
@@ -491,6 +548,38 @@ def metadata_chat(
 
     with conversation_lock:
         conversation_states[state_key] = route["state"]
+
+    if route["status"] == "out_of_scope":
+        language_instruction = ("Respond in the language and script of the user's message. "
+                                "If Hinglish, use natural Hinglish.")
+        return run_scope_reply(prompt, loaded_session.get("selected_chat_model"), language_instruction)
+
+    if route["status"] == "general":
+        from inference import inference_faiss
+        model_name = loaded_session.get("embedding_model_name", "all-MiniLM-L6-v2")
+        faiss_path = os.path.join(faiss_index_dir, "index.faiss")
+        pickle_path = os.path.join(faiss_index_dir, "index.pkl")
+        embeddings, vectorstore = _load_metadata_index(
+            faiss_index_dir, model_name, os.stat(faiss_path).st_mtime_ns,
+            os.stat(pickle_path).st_mtime_ns)
+        answer = inference_faiss(
+            chat_model=loaded_session.get("selected_chat_model"), question=prompt,
+            embedding_model_global=embeddings, index=vectorstore.index,
+            docstore=vectorstore.docstore,
+            index_to_docstore_id=vectorstore.index_to_docstore_id,
+            chat_history=route["state"].get("history", []),
+            custom_instructions=answer_instructions,
+            max_output_tokens=loaded_session.get("max_output_tokens", 1024),
+            top_k=loaded_session.get("top_k", 8),
+            temperature=loaded_session.get("temperature", 0.3))
+        with conversation_lock:
+            latest = conversation_states.get(state_key, {})
+            latest.setdefault("history", [])
+            latest["history"].extend([{"role":"user","content":prompt},
+                                      {"role":"assistant","content":answer}])
+            latest["history"] = latest["history"][-12:]
+            conversation_states[state_key] = latest
+        return answer
 
     if route["status"] == "recommend":
         from inference import inference_recommendation
@@ -509,7 +598,7 @@ def metadata_chat(
             embedding_model=embeddings, docstore=vectorstore.docstore,
             index=vectorstore.index,
             index_to_docstore_id=vectorstore.index_to_docstore_id,
-            custom_instructions=loaded_session.get("custom_prompt"),
+            custom_instructions=answer_instructions,
             max_output_tokens=loaded_session.get("max_output_tokens", 1024),
             top_k=loaded_session.get("top_k", 8),
             temperature=loaded_session.get("temperature", 0.3))
@@ -526,6 +615,11 @@ def metadata_chat(
         return route["response"]
 
     resolved_question = route["question"]
+    # Keep original wording for response language; use English only for searching.
+    search_question = retrieval_query_in_english(
+        resolved_question, loaded_session.get("selected_chat_model")
+    )
+    print("[MULTILINGUAL] Retrieval query:", search_question)
     products = route.get("products") or [route["product"]]
 
     model_name = loaded_session.get("embedding_model_name", "all-MiniLM-L6-v2")
@@ -541,14 +635,14 @@ def metadata_chat(
     selected_by_product = {}
     for product in products:
         candidates = rank_metadata_urls(
-            question=resolved_question, product=product, records=records,
+            question=search_question, product=product, records=records,
             embedding_model=embeddings, limit=12, indexed_urls=available_urls
         )
         if not candidates:
             print("[ROUTER] No indexed candidates:", product)
             continue
         urls = select_urls_with_llm(
-            question=resolved_question, product=product, candidates=candidates,
+            question=search_question, product=product, candidates=candidates,
             chat_model=loaded_session.get("selected_chat_model")
         )
         # If LLM rejects every URL, use the best ranked indexed page.
@@ -570,7 +664,7 @@ def metadata_chat(
             docstore=vectorstore.docstore, selected_by_product=selected_by_product,
             index=vectorstore.index,
             index_to_docstore_id=vectorstore.index_to_docstore_id,
-            chat_history=history, custom_instructions=loaded_session.get("custom_prompt"),
+            chat_history=history, custom_instructions=answer_instructions,
             max_output_tokens=loaded_session.get("max_output_tokens", 1024),
             top_k=loaded_session.get("top_k", 8),
             temperature=loaded_session.get("temperature", 0.3)
@@ -578,12 +672,13 @@ def metadata_chat(
     else:
         answer = inference_selected_urls(
             chat_model=loaded_session.get("selected_chat_model"),
-            question=resolved_question, embedding_model=embeddings,
+            question=resolved_question, retrieval_question=search_question,
+            embedding_model=embeddings,
             docstore=vectorstore.docstore,
             selected_urls=selected_by_product[products[0]],
             index=vectorstore.index,
             index_to_docstore_id=vectorstore.index_to_docstore_id,
-            chat_history=history, custom_instructions=loaded_session.get("custom_prompt"),
+            chat_history=history, custom_instructions=answer_instructions,
             max_output_tokens=loaded_session.get("max_output_tokens", 1024),
             top_k=loaded_session.get("top_k", 8),
             temperature=loaded_session.get("temperature", 0.3)
@@ -612,8 +707,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     # 🌐 Detect language
     try:
         detected_lang = detect(prompt)
-        if detected_lang not in ['en', 'hi']:
-            detected_lang = 'en'
+        # Preserve detected vernacular language instead of forcing non-Hindi to English.
     except Exception:
         print("⚠️ [LANGUAGE] ➤ Language detection failed. Defaulting to English.")
         detected_lang = 'en'
@@ -635,6 +729,16 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print(f"❌ [CHAT] ➤ Failed to load session state: {e}")
         raise HTTPException(status_code=500, detail="❌ Failed to load session state.")
 
+    # Greetings are a conversational UI action, not a metadata search.
+    # Handle them before LLM routing, FAISS retrieval, and source citations.
+    greeting_reply = validate_greeting(prompt)
+    if greeting_reply is not None:
+        return {
+            "response": greeting_reply,
+            "language": detected_lang,
+            "conversation_id": payload.conversation_id
+        }
+
     metadata_path = os.path.join(
         domain_folder, "metadata.json"
     )
@@ -655,11 +759,13 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
                 conversation_id=conversation_id,
                 loaded_session=loaded_session,
                 faiss_index_dir=faiss_index_dir,
-                metadata_path=metadata_path
+                metadata_path=metadata_path,
+                response_language=detected_lang,
+                original_question=prompt
             )
 
             return {
-                "response": response,
+                "response": clean_customer_text(response),
                 "language": detected_lang,
                 "conversation_id": conversation_id
             }
@@ -675,7 +781,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     embedding_model = loaded_session.get("embedding_model_global", None)
     selected_vectordb = loaded_session.get("selected_vectordb", "FAISS")
     selected_chat_model = loaded_session.get("selected_chat_model", None)
-    custom_prompt = loaded_session.get("custom_prompt", None)
+    custom_prompt = (loaded_session.get("custom_prompt") or "") + "\n" + answer_language_instruction(detected_lang, prompt)
     top_k = loaded_session.get("top_k", 8)
     temperature = loaded_session.get("temperature", 0.3)
 
@@ -728,7 +834,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             print(f"⚠️ [SQLITE] ➤ Failed to log chat: {e}")
 
         return {
-            "response": response,
+            "response": clean_customer_text(response),
             "language": detected_lang
         }
 
