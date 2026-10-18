@@ -626,10 +626,15 @@ Return ONLY a JSON object, no prose or code fences:
         state.update(products=[], product=None, pending_question=state.get("pending_question") or question)
         return {"status":"clarify", "response":message, "state":state}
     pending_question = state.get("pending_question")
+    # A confirmation of a pending clarification is a request about the
+    # already-identified product, NOT a request for product recommendations.
+    # Keep the original customer request as the retrieval question.
     if pending_question and selected and len(question.split()) <= 6:
         resolved_question = pending_question + "\nProduct specified by user: " + question
     else:
         resolved_question = question
+    if intent == "recommendation" and pending_question and selected:
+        intent = "single" if len(selected) == 1 else "comparison"
     if intent == "recommendation":
         family = data.get("family")
         if family in {"card", "account", "loan", "deposit"}:
