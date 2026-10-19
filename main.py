@@ -460,6 +460,62 @@ def _load_metadata_index(index_dir, model_name, faiss_mtime, pickle_mtime):
     return embeddings, vectorstore
 
 
+def strip_social_links(reply):
+    """Defense in depth: social replies must never expose citations or URLs."""
+    if not isinstance(reply, str):
+        return reply
+    # Remove an entire related-results/sources section, if generated.
+    reply = re.split(r"(?im)^\s*(?:Related search results|Sources)\s*:\s*$", reply, maxsplit=1)[0]
+    reply = re.sub(r"\[[^\]\n]*\]\(https?://[^)]+\)", "", reply)
+    reply = re.sub(r"https?://[^\s<>]+", "", reply)
+    return clean_customer_text(reply).strip()
+
+
+def conversational_social_reply(question, chat_model, response_language):
+    """LLM-based conversational gate: no fixed greeting phrase list.
+
+    Returns None for substantive banking requests and unrelated questions.
+    """
+    from inference import run_chat_model, get_current_datetime
+    now_ist = get_current_datetime()
+    rules = (
+        "You are a narrow conversational intent classifier for AU Bank's chatbot. "
+        "Classify the current message into SOCIAL, BANKING, or OTHER. "
+        "SOCIAL includes greetings, checking how the assistant is, thanks, farewells, "
+        "and short courteous small talk that does not request unrelated factual content. "
+        "BANKING includes any question or request about banking, AU Bank, products, "
+        "accounts, loans, deposits, cards, and their follow-ups, EVEN IF it begins with a greeting. "
+        "OTHER includes requests about unrelated subjects, such as movies, sports, recipes, or coding. "
+        "Return ONLY one of these exact words: SOCIAL, BANKING, OTHER. "
+        "Do not answer the message."
+    )
+    classification = run_chat_model(
+        chat_model, "", question, [], custom_instructions=rules,
+        max_output_tokens=24, temperature=0)
+    label = str(classification).strip().upper()
+    if label != "SOCIAL":
+        return None
+    language_rule = answer_language_instruction(response_language, question)
+    reply_rules = (
+        "You are AUra+, AU Bank's friendly, professional banking assistant. "
+        "Respond naturally and warmly to the user's SOCIAL message, in 1-2 short sentences. "
+        "Do not answer unrelated factual questions or pretend to have human experiences. "
+        "Gently invite a banking question, but do not repeat a robotic scope disclaimer. "
+        "Use the current Indian time to validate time-of-day greetings. "
+        f"The current time in Asia/Kolkata is {now_ist}. "
+        "Morning is 05:00-11:59, afternoon 12:00-16:59, evening 17:00-20:59, "
+        "and late night 21:00-04:59. If the user's time-of-day greeting is wrong, "
+        "politely use the correct greeting without lecturing them. "
+        "If the greeting is correct, reciprocate it. "
+        "For late-night conversational openings, a simple Hello is appropriate; "
+        "respond naturally to Good night as a farewell if that is the user's intent. "
+        "Do not include URLs, sources, markdown, or financial claims. " + language_rule
+    )
+    return strip_social_links(run_chat_model(
+        chat_model, "", question, [], custom_instructions=reply_rules,
+        max_output_tokens=110, temperature=0.25))
+
+
 def run_scope_reply(question, chat_model, language_instruction):
     from inference import run_chat_model
     return run_chat_model(
@@ -468,8 +524,9 @@ def run_scope_reply(question, chat_model, language_instruction):
             "This question is outside the AU Bank chatbot's scope. "
             "Reply briefly and politely that you can help with AU Bank products "
             "and services, such as accounts, deposits, loans, and cards. "
-            "Do not answer the unrelated question. Do not ask which product "
-            "the user means. " + language_instruction),
+            "Do not answer the unrelated question. End with a friendly invitation "
+            "such as: Would you like to know about any of them? "
+            "Do not ask which specific product the user means. " + language_instruction),
         max_output_tokens=120, temperature=0)
 
 
@@ -803,15 +860,18 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print(f"❌ [CHAT] ➤ Failed to load session state: {e}")
         raise HTTPException(status_code=500, detail="❌ Failed to load session state.")
 
-    # Greetings are a conversational UI action, not a metadata search.
-    # Handle them before LLM routing, FAISS retrieval, and source citations.
-    greeting_reply = validate_greeting(prompt)
-    if greeting_reply is not None:
-        return {
-            "response": greeting_reply,
-            "language": detected_lang,
-            "conversation_id": payload.conversation_id
-        }
+    # Social conversation is handled by the selected LLM, before RAG.
+    # This intentionally does not depend on a hardcoded greeting list.
+    # Only short messages need this extra classification call.
+    if len(prompt.split()) <= 18:
+        social_reply = conversational_social_reply(
+            prompt, loaded_session.get("selected_chat_model"), detected_lang)
+        if social_reply is not None:
+            return {
+                "response": strip_social_links(social_reply),
+                "language": detected_lang,
+                "conversation_id": payload.conversation_id or str(uuid.uuid4())
+            }
 
     metadata_path = os.path.join(
         domain_folder, "metadata.json"
