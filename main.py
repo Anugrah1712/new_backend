@@ -28,6 +28,8 @@ from metadata_router import (
     rank_metadata_urls,
     recommendation_candidates,
     select_urls_with_llm,
+    is_generic_savings_question,
+    savings_overview_urls,
 )
 
 from inference import inference_selected_urls, indexed_source_urls
@@ -491,7 +493,7 @@ def conversational_social_reply(question, chat_model, response_language):
     )
     classification = run_chat_model(
         chat_model, "", question, [], custom_instructions=rules,
-        max_output_tokens=24, temperature=0)
+        max_output_tokens=160, temperature=0)
     label = str(classification).strip().upper()
     if label != "SOCIAL":
         return None
@@ -663,6 +665,14 @@ def metadata_chat(
 ):
     records = load_metadata(metadata_path)
     answer_instructions = (loaded_session.get("custom_prompt") or "") + "\n" + answer_language_instruction(response_language, original_question or prompt)
+    answer_instructions += ("\nAU BANK EVIDENCE RULE: Answer only about AU Bank. "
+        "For account-opening questions, distinguish an initial opening deposit "
+        "from minimum balance and average monthly balance (AMB). "
+        "If a retrieved AU Bank page states an AMB but not a one-time opening deposit, "
+        "give the verified AMB with its exact account/branch qualification, "
+        "and explicitly say the initial deposit is not specified. "
+        "Never imply zero AMB proves zero initial deposit. "
+        "Never invent financial amounts or cite irrelevant pages. ")
 
     state_key = (domain, conversation_id)
 
@@ -751,6 +761,8 @@ def metadata_chat(
         return route["response"]
 
     resolved_question = route["question"]
+    # A product-only switch must keep the user's substantive question for
+    # retrieval, while the response remains in the language of the current turn.
     # Keep original wording for response language; use English only for searching.
     search_question = retrieval_query_in_english(
         resolved_question, loaded_session.get("selected_chat_model")
@@ -781,9 +793,16 @@ def metadata_chat(
             question=search_question, product=product, candidates=candidates,
             chat_model=loaded_session.get("selected_chat_model")
         )
-        # If LLM rejects every URL, use the best ranked indexed page.
+        # Prefer the verified AU Savings Account overview for generic requests.
+        # Do not allow a blog fallback to obscure an indexed official overview.
+        if is_generic_savings_question(search_question) and product == "savings_account":
+            overview = savings_overview_urls(records, available_urls)
+            if overview:
+                urls = overview[:1] + [u for u in urls if u not in overview][:2]
         if not urls:
-            urls = [candidates[0]["url"]]
+            main_pages = [c for c in candidates if c.get("category") == "main"
+                          and "/blogs/" not in c["url"]]
+            urls = [(main_pages or candidates)[0]["url"]]
         selected_by_product[product] = urls
         print("[ROUTER] Product:", product, "Selected URLs:", urls)
 

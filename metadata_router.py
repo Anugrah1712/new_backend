@@ -34,6 +34,7 @@ PRODUCT_CANONICAL_MAP = {
     "fd": "fixed_deposit", "fds": "fixed_deposit",
     "fixed_deposits": "fixed_deposit",
     "term_deposit": "fixed_deposit", "term_deposits": "fixed_deposit",
+    "au_savings_account": "savings_account",
     "green_fd": "green_fixed_deposit",
     "green_fixed_deposits": "green_fixed_deposit",
     "bulk_fd": "bulk_fixed_deposit",
@@ -44,6 +45,25 @@ PRODUCT_CANONICAL_MAP = {
 def canonical_product(product):
     key = normalize_product(product).replace(" ", "_")
     return PRODUCT_CANONICAL_MAP.get(key, key)
+
+
+def is_generic_savings_question(question):
+    """Only generic savings queries; never override an explicitly named variant."""
+    q = normalize_product(question.split("\nProduct specified by user:")[0])
+    if not re.search(r"\bsavings?\s+accounts?\b", q):
+        return False
+    specific = ("regular", "digital", "aarambh", "smart saver", "bsbda", "basic",
+                "value", "ivy", "royale", "kids", "kisan", "shakti", "swadesh",
+                "senior citizen", "platinum", "abhi", "institution", "women")
+    return not any(re.search(r"(?<!\w)" + re.escape(x) + r"(?!\w)", q) for x in specific)
+
+
+def savings_overview_urls(records, indexed_urls=None):
+    """Grounded in metadata, not a fabricated account variant."""
+    available = {normalize_url(u) for u in indexed_urls} if indexed_urls is not None else None
+    return [r["url"] for r in records
+            if urlsplit(r["url"]).path.rstrip("/").lower() == "/personal-banking/savings-account"
+            and (available is None or normalize_url(r["url"]) in available)]
 
 
 def load_metadata(path):
@@ -442,11 +462,16 @@ def rank_metadata_urls(question, product, records, embedding_model,
     semantic = cosine_similarity(q_vec, doc_vecs).ravel()
     scores = 0.45 * lexical + 0.55 * semantic
 
+    # Stronger preference for authoritative product pages when the question
+    # asks for an exact opening amount, eligibility requirement, or rate.
+    exact_requirement = bool(re.search(r"opening|open\b|deposit|minimum|balance|require|eligib", query, re.I))
     # Prefer core product/rate pages over incidental mentions in blogs.
     for i, item in enumerate(candidates):
         path = urlsplit(item["url"]).path.lower()
         if item["category"] == "main":
-            scores[i] += 0.04
+            scores[i] += 0.16 if exact_requirement else 0.08
+        if exact_requirement and "/blogs/" in path:
+            scores[i] -= 0.08
         if "interest" in query.lower() and "interest-rate" in path:
             scores[i] += 0.10
 
@@ -471,13 +496,16 @@ def select_urls_with_llm(question, product, candidates, chat_model,
             "id": i,
             "url": c["url"],
             "category": c["category"],
-            "summary": c["summary"][:1400]
+            "summary": c["summary"][:500]
         }
         for i, c in enumerate(candidates)
     ]
 
     instruction = """
-Select the best source URLs for answering the user question.
+Select the best AU Bank source URLs for answering the user question.
+Only select AU Bank product/service pages relevant to the question.
+Prefer primary AU Bank product pages and official terms over generic blog articles when both are relevant.
+Never select a page whose principal subject is another bank.
 
 Return ONLY JSON:
 {"ids": [0, 1]}
@@ -486,6 +514,8 @@ Rules:
 - Select up to 3 candidate IDs.
 - Use only IDs in the supplied list.
 - Prefer the authoritative page directly answering the question.
+- For an opening deposit question, distinguish initial funding from average/minimum balance.
+- Do not choose a blog merely because it mentions the account if a more specific official product page exists.
 - Prefer regular/main rate pages for generic rate questions.
 - Do not select green/bulk/special variants unless asked.
 - Do not invent URLs, facts, products, or IDs.
@@ -535,26 +565,19 @@ def route_question_llm(question, records, conversation_state=None, chat_model=No
     if not chat_model:
         raise ValueError("A selected chat model is required for metadata routing")
 
-    # Catalog is constructed dynamically from the uploaded metadata, including
-    # its own product identifiers and descriptive summaries.
-    catalog = {}
-    for record in records:
-        for product in record.get("product", []):
-            key = str(product).strip()
-            if key:
-                catalog.setdefault(key, [])
-                if len(catalog[key]) < 1:
-                    catalog[key].append(str(record.get("summary", ""))[:130])
-
-    catalog_text = json.dumps(
-        [{"id": key, "descriptions": descriptions}
-         for key, descriptions in catalog.items()], ensure_ascii=False)
+    # Keep classification small: product identifiers are sufficient for routing.
+    # URL summaries are used later during URL ranking, not in this classifier.
+    catalog = {str(product).strip(): [] for record in records
+               for product in record.get("product", []) if str(product).strip()}
     recent_user_turns = [m.get("content", "") for m in state.get("history", [])
-                         if m.get("role") == "user"][-3:]
-    context = json.dumps({"products": json.loads(catalog_text),
-                          "previous_products": state.get("products", []),
-                          "recent_user_questions": recent_user_turns,
-                          "pending_question": state.get("pending_question")}, ensure_ascii=False)
+                         if m.get("role") == "user"][-2:]
+    context = json.dumps({
+        "available_product_ids": sorted(catalog),
+        "previous_products": state.get("products", []),
+        "recent_user_questions": recent_user_turns,
+        "pending_question": state.get("pending_question"),
+        "last_banking_question": state.get("last_banking_question")
+    }, ensure_ascii=False)
     rules = """You classify user queries for an AU Bank product/service chatbot.
 Return ONLY a JSON object, no prose or code fences:
 {"scope":"in_scope|out_of_scope|uncertain","intent":"single|comparison|recommendation|general|clarify", "products":[], "family":null, "explicit_product":false, "clarification":""}
@@ -575,6 +598,7 @@ Return ONLY a JSON object, no prose or code fences:
 - Do NOT infer a savings account, FD, loan, or other product solely because one
   catalog product contains that audience term. The presence of a catalog match
   does not establish the user's intended product.
+- A generic Savings Account request is not an explicit Regular Savings Account request.
 - Set explicit_product=true ONLY if the user actually identifies a product or
   clearly refers to an already established product in a genuine follow-up.
 - If a product-specific question has multiple plausible products and no product
@@ -587,13 +611,38 @@ Return ONLY a JSON object, no prose or code fences:
 - When pending_question exists, a short product reply resolves that pending question.
   Classify the reply using the catalog and answer the combined original request.
 - Respond in the user's language when generating clarification text.
+- Clarifications must mention AU Bank products only, using names present in the catalog.
+- Never suggest or mention products of any other bank.
 """
-    raw = run_chat_model(chat_model, context, question, [],
-                         custom_instructions=rules, max_output_tokens=450, temperature=0)
-    match = re.search(r"\{[\s\S]*\}", str(raw))
-    if not match:
-        raise ValueError("LLM router did not return valid JSON")
-    data = json.loads(match.group(0))
+    data = None
+    for attempt in range(2):
+        raw = run_chat_model(
+            chat_model, context, question, [],
+            custom_instructions=rules + ("\nIMPORTANT: Output the complete JSON object only."
+                                         if attempt else ""),
+            max_output_tokens=1200 if attempt else 800, temperature=0
+        )
+        try:
+            match = re.search(r"\{[\s\S]*\}", str(raw or ""))
+            if match:
+                candidate = json.loads(match.group(0))
+                if isinstance(candidate, dict) and candidate.get("scope") in {
+                    "in_scope", "out_of_scope", "uncertain"
+                } and candidate.get("intent") in {
+                    "single", "comparison", "recommendation", "general", "clarify"
+                }:
+                    data = candidate
+                    break
+        except (ValueError, TypeError):
+            pass
+        print(f"[ROUTER] Invalid JSON on attempt {attempt + 1}; retrying if possible")
+    if data is None:
+        # Avoid an HTTP 500 when classification output is truncated.
+        # Do not invent a product selection.
+        state["pending_question"] = question
+        return {"status": "clarify", "response":
+                "I couldn't process that fully. Could you please try your question again?",
+                "state": state}
     scope = data.get("scope")
     intent = data.get("intent")
     if scope not in {"in_scope", "out_of_scope", "uncertain"}:
@@ -619,13 +668,41 @@ Return ONLY a JSON object, no prose or code fences:
             chosen = options[0] if len(options) == 1 else None
         if chosen and chosen not in selected:
             selected.append(chosen)
+    # A fresh, generic savings question must not inherit a specific variant.
+    # The overview is a verified metadata record and is answered via FAISS.
+    if is_generic_savings_question(question) and not state.get("pending_question"):
+        overview = savings_overview_urls(records)
+        if overview:
+            state.update(products=["savings_account"], product="savings_account",
+                         pending_question=None, last_banking_question=question)
+            return {"status": "ready", "intent": "single", "products": ["savings_account"],
+                    "product": "savings_account", "question": question, "state": state}
+    # Short product switches inherit the last substantive question, regardless of
+    # whether the classifier unnecessarily requested another clarification.
+    pending_question = state.get("pending_question")
+    previous_question = pending_question or state.get("last_banking_question")
+    product_only = (bool(selected) and len(question.split()) <= 7
+                    and not is_product_clarification(question))
+    if product_only and previous_question:
+        base_question = re.split(r"\nProduct specified by user:", previous_question, maxsplit=1)[0].strip()
+        resolved_question = base_question + "\nProduct specified by user: " + question
+        state.update(products=selected, product=selected[0] if len(selected) == 1 else None,
+                     pending_question=None, last_banking_question=base_question)
+        return {"status": "ready", "intent": "comparison" if len(selected)>1 else "single",
+                "products": selected, "product": selected[0], "question": resolved_question,
+                "state": state}
     # Clarification must win over a speculative product ID. The model, not a
     # hardcoded list of products/keywords, decides whether a product was specified.
     if intent == "clarify" and scope == "in_scope":
         message = str(data.get("clarification") or "Which AU Bank product or service do you mean?").strip()
-        state.update(products=[], product=None, pending_question=state.get("pending_question") or question)
+        state.update(products=[], product=None, pending_question=state.get("pending_question") or question,
+                     last_banking_question=state.get("pending_question") or question)
         return {"status":"clarify", "response":message, "state":state}
     pending_question = state.get("pending_question")
+    # A product-only follow-up can switch products while keeping the question.
+    product_only = bool(selected) and len(normalize_product(question).split()) <= 5 and not is_product_clarification(question)
+    if product_only and not pending_question and state.get("last_banking_question"):
+        pending_question = state["last_banking_question"]
     # A confirmation of a pending clarification is a request about the
     # already-identified product, NOT a request for product recommendations.
     # Keep the original customer request as the retrieval question.
@@ -643,6 +720,8 @@ Return ONLY a JSON object, no prose or code fences:
             return {"status":"recommend", "intent":"recommendation", "family":family,
                     "products":selected, "question":resolved_question, "state":state}
     if selected:
+        if not product_only:
+            state["last_banking_question"] = question
         state.update(products=selected, product=selected[0] if len(selected)==1 else None,
                      pending_question=None)
         return {"status":"ready", "intent":"comparison" if len(selected)>1 else "single",
