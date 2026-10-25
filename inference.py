@@ -340,11 +340,35 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
                 max_output_tokens=max_output_tokens
             )
 
-            answer = response.output_text
+            answer = (response.output_text or "").strip()
             print("[OpenAI Response Status]", getattr(response, "status", None))
             print("[OpenAI Incomplete Details]", getattr(response, "incomplete_details", None))
             print("[OpenAI Usage]", getattr(response, "usage", None))
 
+            # Reasoning tokens count against max_output_tokens. If they consume
+            # the whole budget, output_text may be empty even on HTTP 200.
+            if not answer:
+                retry_budget = max(512, int(max_output_tokens or 0) * 3)
+                retry_budget = min(retry_budget, 4096)
+                print(f"[OpenAI] Empty response; retrying with {retry_budget} output tokens")
+                retry = openai_client.responses.create(
+                    model=selected_model,
+                    instructions=(
+                        "You are a reliable RAG assistant. Follow the supplied "
+                        "instructions and use retrieved evidence for factual answers. "
+                        "Return visible answer text; do not leave the answer empty."
+                    ),
+                    input=prompt,
+                    max_output_tokens=retry_budget
+                )
+                answer = (retry.output_text or "").strip()
+                print("[OpenAI Retry Status]", getattr(retry, "status", None))
+                print("[OpenAI Retry Usage]", getattr(retry, "usage", None))
+            if not answer:
+                raise RuntimeError(
+                    "OpenAI returned no visible text after retry; "
+                    "check response status, token budget and model configuration."
+                )
             print("[OpenAI GPT Response]", answer)
             return answer
 

@@ -513,9 +513,24 @@ def conversational_social_reply(question, chat_model, response_language):
         "respond naturally to Good night as a farewell if that is the user's intent. "
         "Do not include URLs, sources, markdown, or financial claims. " + language_rule
     )
-    return strip_social_links(run_chat_model(
-        chat_model, "", question, [], custom_instructions=reply_rules,
-        max_output_tokens=110, temperature=0.25))
+    # Reasoning-capable models may spend the entire output budget on reasoning.
+    # Never return an empty assistant message to the frontend.
+    try:
+        reply = run_chat_model(
+            chat_model, "", question, [], custom_instructions=reply_rules,
+            max_output_tokens=450, temperature=0.25)
+        reply = strip_social_links(reply or "")
+        if reply:
+            return reply
+    except Exception as exc:
+        print("[SOCIAL] Generation failed:", repr(exc))
+
+    # Safe, non-factual fallback; no source retrieval is needed for small talk.
+    if response_language in ("hi", "hi-Latn"):
+        return ("नमस्कार! AU Bank से जुड़ी किसी जानकारी में मैं आपकी कैसे मदद कर सकता हूँ?"
+                if response_language == "hi" else
+                "Namaskar! AU Bank se judi kisi jaankari mein main aapki kaise madad kar sakta hoon?")
+    return "Hello! I'm here to help with your AU Bank questions. How can I assist you?"
 
 
 def run_scope_reply(question, chat_model, language_instruction):
