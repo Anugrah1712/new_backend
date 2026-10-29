@@ -4,6 +4,7 @@
     "category": "main",
     "product": [
       "accident_insurance",
+      "au_personal_loan",
       "car_loan",
       "commercial_vehicle_insurance",
       "credit_card",
@@ -14,7 +15,6 @@
       "ivy_savings_account",
       "mutual_funds",
       "nps",
-      "personal_loan",
       "private_car_insurance",
       "savings_account",
       "sweep_in_fixed_deposit",
@@ -106,7 +106,7 @@
     "url": "https://www.au.bank.in/premium-banking/savings-account/royale-world",
     "category": "main",
     "product": [
-      "royale_world_savings_account"
+      "au_royale_world_savings_account"
     ],
     "summary": "Page describing AU Royale World, an NRI savings account, including account benefits such as monthly interest payouts, video banking, lounge access, debit-card features, and service support. It covers eligibility, the ₹5 lakh average monthly balance requirement, required documents, application options, fees and charges, and FAQs about cross-currency mark-up fees, tax queries, and lounge access. It can answer questions about the account’s stated benefits, who may apply, how to apply, and where to find related terms and charges."
   },
@@ -391,6 +391,7 @@
     "url": "https://www.au.bank.in/personal-banking",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_insurance",
       "car_loan",
       "commercial_vehicle_insurance",
@@ -404,7 +405,6 @@
       "mutual_funds",
       "national_pension_system",
       "personal_accident_insurance",
-      "personal_loan",
       "savings_account",
       "savings_plan",
       "term_insurance",
@@ -707,7 +707,7 @@
     "product": [
       "au_ca_metal_credit_card",
       "au_royale_debit_card",
-      "royale_savings_account"
+      "au_royale_savings_account"
     ],
     "summary": "Page for AU Royale Savings Account for Chartered Accountants, an account program for Indian residents who are active ICAI members. It describes eligibility, application channels, the zero-minimum-balance requirement, account benefits, debit-card privileges, family banking, digital banking services, and the associated lifetime-free AU CA Metal Credit Card. FAQs address eligibility, balance requirements, family members, benefits, and how to apply. The page also includes terms and conditions, service-fee information, and details of benefit limits."
   },
@@ -751,8 +751,8 @@
     "url": "https://www.au.bank.in/personal-banking/savings-account/au-royale-savings-accounts-company-secretaries",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "debit_card",
-      "personal_loan",
       "savings_account"
     ],
     "summary": "Page for AU Royale Savings Account for Company Secretaries, describing eligibility for Indian residents who are active ICSI members, account benefits, debit-card privileges, and access to personal-loan offers. FAQs cover applying, balance requirements, family inclusion, upgrades, and who can join. Useful for discovering the account’s stated features, eligibility, and application channels."
@@ -1165,6 +1165,7 @@
     "category": "main",
     "product": [
       "au_0101_netbanking",
+      "au_personal_loan",
       "car_loan",
       "credit_card",
       "current_account",
@@ -1175,7 +1176,6 @@
       "green_fixed_deposit",
       "ipo",
       "mutual_funds",
-      "personal_loan",
       "recurring_deposit",
       "savings_account",
       "tax_saving_fixed_deposit",
@@ -1313,12 +1313,12 @@
     "category": "main",
     "product": [
       "au_0101_business_app",
+      "au_personal_loan",
       "car_loan",
       "current_account",
       "debit_card",
       "fixed_deposit",
       "gold_loan",
-      "personal_loan",
       "qr_payments",
       "recurring_deposit",
       "savings_account",
@@ -1343,12 +1343,12 @@
     "category": "main",
     "product": [
       "au_0101_mobile_banking_app",
+      "au_personal_loan",
       "car_loan",
       "fastag",
       "fixed_deposit",
       "gift_cards",
       "green_fixed_deposit",
-      "personal_loan",
       "recurring_deposit",
       "savings_account"
     ],
@@ -1480,6 +1480,7 @@
     "category": "main",
     "product": [
       "agri_term_loan",
+      "au_personal_loan",
       "auto_loan",
       "business_loan",
       "credit_card",
@@ -1493,7 +1494,6 @@
       "ipo",
       "mutual_funds",
       "overdraft_account",
-      "personal_loan",
       "recurring_deposit",
       "savings_account",
       "two_wheeler_loan",
@@ -1554,9 +1554,9 @@
     "url": "https://www.au.bank.in/personal-banking/personal-loan",
     "category": "main",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
-    "summary": "AU Small Finance Bank’s personal loan page describes loan benefits, application steps, eligibility, fees and charges, repayment tenures, prepayment rules, and an EMI calculator. It includes FAQs about loan amounts, interest, disbursal, collateral, foreclosure, and tax benefits, plus general borrowing considerations. The page contains differing maximum loan amounts in its eligibility section and FAQ."
+    "summary": "Primary AU Personal Loan product page. Covers personal-loan eligibility, application, processing fees and other charges, interest rates, repayment tenure, prepayment and foreclosure rules, EMI calculation, loan amounts, documentation and FAQs. Prefer this primary product page for general personal-loan questions, including processing fees; use promotional or occupation-specific pages only when the user asks about those offers. The source contains differing maximum loan amounts across sections; verify the relevant passage before quoting a figure."
   },
   {
     "url": "https://www.au.bank.in/personal-banking/credit-cards",
@@ -1851,9 +1851,9 @@
     "url": "https://www.au.bank.in/personal-banking/loans",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "instant_loan",
-      "personal_loan",
       "two_wheeler_loan"
     ],
     "summary": "The page highlights AU Bank loan options, including car, personal, two-wheeler, and instant loans. It mentions quick or instant processing, minimal documentation, flexible repayment or tenure, and a personal loan amount of up to ₹15 lakh. It can answer which loan types are promoted and what broad application benefits are stated; detailed rates, eligibility, and terms are not provided in the excerpt."
@@ -2194,9 +2194,9 @@
     "url": "https://www.au.bank.in/personal-banking/emi-calculator",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "home_loan",
-      "personal_loan",
       "two_wheeler_loan"
     ],
     "summary": "A landing page for EMI calculators for home, car, personal, and two-wheeler loans. It describes estimating monthly EMIs and total interest and planning repayments. It also offers general vehicle-loan considerations, including down payment, loan tenure, affordability, charges, and repayment or foreclosure terms. The page can answer which loan calculators are available and what kinds of estimates and planning they support."
@@ -2205,7 +2205,7 @@
     "url": "https://www.au.bank.in/personal-banking/emi-calculator/personal-loan-calculator",
     "category": "main",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Personal Loan EMI calculator page explaining how to enter loan amount, interest rate, and tenure, and showing the EMI formula. Its FAQs address personal-loan uses and process, minimum and maximum loan amounts, interest rate and repayment tenure, collateral, foreclosure, tax benefits, and stated advantages. The page can help identify what the calculator does and which personal-loan questions it covers."
   },
@@ -3562,7 +3562,7 @@
       "au_royale_business_current_account",
       "au_royale_savings_account"
     ],
-    "summary": "Page describing AU Bank’s Company Secretaries program for active ICSI members, including Royale savings and business current accounts, card and personal loan offers. FAQs cover eligibility, balance requirements, debit-card and lifestyle benefits, family banking, exclusions, application methods, and upgrading an existing savings account."
+    "summary": "Page describing AU Bank’s Company Secretaries program for active ICSI members, including Royale savings and business current accounts, card and personal loan offers. FAQs cover eligibility, balance requirements, debit-card and lifestyle benefits, family banking, exclusions, application methods, and upgrading an existing savings account. This is a company-secretaries-specific offer; do not prioritize it for general personal-loan fees unless that program is requested."
   },
   {
     "url": "https://www.au.bank.in/personal-banking/loan-on-credit-card",
@@ -4332,6 +4332,7 @@
     "url": "https://www.au.bank.in/products",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "business_banking",
       "car_loan",
       "credit_card",
@@ -4345,7 +4346,6 @@
       "mutual_funds",
       "national_pension_system",
       "personal_accident_insurance",
-      "personal_loan",
       "savings_account",
       "savings_plan",
       "term_insurance",
@@ -5338,13 +5338,13 @@
     "category": "main",
     "product": [
       "au_0101_app",
+      "au_personal_loan",
       "credit_cards",
       "debit_cards",
       "deposits",
       "insurance",
       "ipos",
       "mutual_funds",
-      "personal_loan",
       "stocks"
     ],
     "summary": "Explains that existing AU Small Finance Bank customers can use the AU 0101 App to manage deposits and credit or debit cards, apply for a personal loan, get insurance cover, invest in mutual funds, stocks, and IPOs, and make lifestyle bookings such as flights and buses. Answers what services existing customers can access on the app; directs readers elsewhere for the complete service list."
@@ -5460,9 +5460,9 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/loans/apply-for-loans",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
-      "gold_loan",
-      "personal_loan"
+      "gold_loan"
     ],
     "summary": "A retail support page for applying for loans, featuring links about applying for personal, car, and gold loans through the AU 0101 app, including separate personal-loan and car-loan pages. It also lists support channels and customer-care contact details. This page can help identify loan application topics and available ways to contact the bank."
   },
@@ -5470,9 +5470,9 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/loans/apply-for-loans/how-to-apply-for-personal-car-two-wheeler-gold-loans-on-au-0101-app",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "gold_loan",
-      "personal_loan",
       "two_wheeler_loan"
     ],
     "summary": "Explains how to apply for a personal, car, two-wheeler, or gold loan through the AU 0101 App: log in, select “Apply Now,” choose a product, and complete the steps. Answers how to begin these loan applications in the app."
@@ -5491,7 +5491,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/loans/apply-for-loans/how-do-i-apply-for-personal-loan-on-au-0101-app",
     "category": "main",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how existing AU Small Finance Bank customers can apply for a personal loan through the AU 0101 app, either using a pre-approved offer or the Apply Now menu, and where to check application details. Answers questions about the in-app application steps."
   },
@@ -5518,7 +5518,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers",
     "category": "main",
     "product": [
-      "fund_transfers",
+      "fund_transfer",
       "imps",
       "neft",
       "rtgs",
@@ -5530,7 +5530,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers/what-are-the-different-modes-i-can-use-to-transfer-funds-on-au-0101-app",
     "category": "main",
     "product": [
-      "fund_transfers",
+      "fund_transfer",
       "imps",
       "neft",
       "rtgs",
@@ -5560,7 +5560,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers/how-can-i-transfer-funds-using-video-banking",
     "category": "main",
     "product": [
-      "fund_transfers"
+      "fund_transfer"
     ],
     "summary": "Explains how to request a fund transfer through Video Banking: open Video Banking in the AU 0101 App, choose Transactions, start or schedule a video call, then provide beneficiary account details and consent to the Video Banking Officer. Answers how to initiate a transfer using this service."
   },
@@ -5568,7 +5568,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers/how-can-i-add-a-beneficiary-payee-on-au-0101-app",
     "category": "main",
     "product": [
-      "fund_transfers"
+      "fund_transfer"
     ],
     "summary": "Explains how existing AU Small Finance Bank customers can add a beneficiary/payee in the AU 0101 App: open Money Transfer, choose Manage Payee and Add New Payee, enter the bank and account details, and submit. It notes that transfers to a newly added payee are limited to INR 50,000 for three hours after addition, after which default limits apply. Answers how to add a payee and what temporary transfer restriction applies."
   },
@@ -5576,7 +5576,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers/how-can-i-schedule-payment-to-my-payee",
     "category": "main",
     "product": [
-      "fund_transfers"
+      "fund_transfer"
     ],
     "summary": "Explains how existing AU Small Finance Bank customers can add a payee in the AU 0101 App, transfer funds using IMPS, NEFT or RTGS, and schedule recurring payments. Answers how to schedule payments to a payee."
   },
@@ -5595,7 +5595,7 @@
     "url": "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers/what-are-the-charges-for-online-fund-transfer",
     "category": "main",
     "product": [
-      "fund_transfers",
+      "fund_transfer",
       "neft",
       "rtgs",
       "upi"
@@ -6297,10 +6297,10 @@
     "category": "main",
     "product": [
       "agri_term_loan",
+      "au_personal_loan",
       "car_loan",
       "gold_loan",
       "home_loan",
-      "personal_loan",
       "two_wheeler_loan"
     ],
     "summary": "A loan-support page listing application-process questions for Agri Term, Car, Two-Wheeler, Personal, Home, and Gold Loans. It also provides customer-support channels and contact information. The excerpt does not include application instructions or loan terms."
@@ -6309,7 +6309,7 @@
     "url": "https://www.au.bank.in/support/contact-us/business/loans/apply-for-loan/how-do-i-apply-for-a-personal-loan",
     "category": "main",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how to apply for a Personal Loan in the AU 0101 Business App: open Banking, select More, go to Loans > Apply for Loan, then choose Personal Loan. Answers where to find the application flow in the app."
   },
@@ -6950,9 +6950,9 @@
     "url": "https://www.au.bank.in/loans",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "instant_loan",
-      "personal_loan",
       "two_wheeler_loan"
     ],
     "summary": "The page promotes AU car, personal, two-wheeler and instant loans, with general claims about quick processing, minimal documentation and flexible repayment. It states that personal loans are available up to ₹15 lakh and gives a ₹20,000–₹1 crore range for an instant loan. It can answer which loan types are featured and what broad application or repayment benefits are mentioned; it does not provide specific loan interest rates."
@@ -6961,13 +6961,13 @@
     "url": "https://www.au.bank.in/loans/interest-relief-under-ex-gratia-scheme",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "auto_loan",
       "cash_credit_overdraft",
       "consumer_durable_loan",
       "credit_card",
       "education_loan",
-      "home_loan",
-      "personal_loan"
+      "home_loan"
     ],
     "summary": "FAQ page about the historical Ex-Gratia scheme, which provided eligible borrowers a credit for the difference between compound and simple interest for March–August 2020. It explains eligibility criteria, covered and excluded loan types, treatment of moratorium use and closed or delinquent accounts, calculation examples, and how credits could be applied. It also provides grievance channels and escalation steps. The page can answer questions about the scheme’s rules and complaint process; it is not a current loan offer."
   },
@@ -6976,6 +6976,7 @@
     "category": "main",
     "product": [
       "accident_insurance",
+      "au_personal_loan",
       "car_loan",
       "credit_card",
       "demat_account",
@@ -6986,7 +6987,6 @@
       "motor_insurance",
       "mutual_funds",
       "nps",
-      "personal_loan",
       "savings_account",
       "term_insurance",
       "trading_account",
@@ -7041,13 +7041,13 @@
     "category": "main",
     "product": [
       "asba",
+      "au_royale_savings_account",
       "bill_payment",
       "debit_card",
       "fastag",
       "fixed_deposit",
       "mutual_fund",
       "recurring_deposit",
-      "royale_savings_account",
       "salary_account"
     ],
     "summary": "Terms and conditions for the Amazon voucher welcome offer for new AU Royale Savings or Salary account customers. Describes qualifying transactions and registrations, voucher amounts, eligibility deadlines, delivery, exclusions, and offer conditions. Answers questions about which activities qualify, who is eligible, and the offer’s restrictions."
@@ -7072,6 +7072,7 @@
     "url": "https://www.au.bank.in/offer",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_insurance",
       "car_loan",
       "commercial_vehicle_insurance",
@@ -7085,7 +7086,6 @@
       "mutual_funds",
       "national_pension_system",
       "personal_accident_insurance",
-      "personal_loan",
       "savings_account",
       "term_insurance",
       "trading_account",
@@ -7205,6 +7205,7 @@
     "url": "https://www.au.bank.in/cards",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "credit_card",
       "demat_account",
@@ -7215,7 +7216,6 @@
       "motor_insurance",
       "mutual_funds",
       "national_pension_system",
-      "personal_loan",
       "savings_account",
       "term_insurance",
       "two_wheeler_loan"
@@ -7501,6 +7501,7 @@
     "url": "https://www.au.bank.in/loan",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "au_remit",
       "car_loan",
       "credit_card",
@@ -7511,7 +7512,6 @@
       "motor_insurance",
       "mutual_funds",
       "nps",
-      "personal_loan",
       "savings_account",
       "term_insurance",
       "two_wheeler_loan"
@@ -7702,6 +7702,7 @@
     "url": "https://www.au.bank.in/apply-now/personal",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_insurance",
       "car_loan",
       "commercial_vehicle_insurance",
@@ -7718,7 +7719,6 @@
       "mutual_funds",
       "nps",
       "personal_accident_insurance",
-      "personal_loan",
       "savings_account",
       "savings_plan",
       "term_insurance",
@@ -7792,11 +7792,11 @@
     "url": "https://www.au.bank.in/apply-now/personal/loans",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "gold_loan",
       "home_loan",
       "loan_against_car",
       "new_car_loan",
-      "personal_loan",
       "two_wheeler_loan",
       "unsecured_micro_business_loan",
       "used_car_loan"
@@ -7847,7 +7847,7 @@
       "au_platinum_savings_account",
       "au_platinum_world",
       "au_royale_business_agri",
-      "au_royale_business_chartered_accountant",
+      "au_royale_business_chartered_accountants",
       "au_royale_business_contractors",
       "au_royale_business_doctors",
       "au_royale_business_pharma",
@@ -8064,6 +8064,7 @@
     "url": "https://www.au.bank.in/netbanking",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "credit_card",
       "debit_card",
@@ -8071,7 +8072,6 @@
       "fixed_deposit",
       "mutual_funds",
       "net_banking",
-      "personal_loan",
       "recurring_deposit"
     ],
     "summary": "AU 0101 NetBanking overview describing online payments, bill and tax payments, card controls, account access, investment options, and applying for or managing selected banking services. It explains registration and access requirements for existing account or credit card customers, and points to registration guidance, branch support, and the mobile banking app. This page can answer questions about NetBanking capabilities, security measures, payment options, registration, and required customer details."
@@ -8117,6 +8117,7 @@
     "category": "main",
     "product": [
       "agriculture_loan",
+      "au_personal_loan",
       "business_loan",
       "commercial_loan",
       "corporate_net_banking",
@@ -8129,7 +8130,6 @@
       "micro_business_loan",
       "mudra_loan",
       "nri_account",
-      "personal_loan",
       "savings_account",
       "supply_chain_finance",
       "term_deposit",
@@ -8571,13 +8571,13 @@
     "category": "main",
     "product": [
       "agri",
+      "au_personal_loan",
       "business_banking",
       "farm_credit_term_loan",
       "gold_loan",
       "home_loan",
       "mbl",
       "micro_finance",
-      "personal_loan",
       "pm_svanidhi",
       "pm_vishwakarma",
       "reg_builder",
@@ -8976,6 +8976,7 @@
     "url": "https://www.au.bank.in/fgli",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_insurance",
       "car_loan",
       "commercial_vehicle_insurance",
@@ -8990,7 +8991,6 @@
       "mutual_funds",
       "nps",
       "personal_accident_insurance",
-      "personal_loan",
       "savings_account",
       "savings_plan",
       "term_plan",
@@ -9283,6 +9283,7 @@
     "category": "main",
     "product": [
       "accident_insurance",
+      "au_personal_loan",
       "car_insurance",
       "car_loan",
       "commercial_vehicle_insurance",
@@ -9295,7 +9296,6 @@
       "international_money_transfer",
       "mutual_funds",
       "nps",
-      "personal_loan",
       "savings_account",
       "term_insurance",
       "two_wheeler_insurance",
@@ -9461,6 +9461,7 @@
     "url": "https://www.au.bank.in/sample-homepage",
     "category": "main",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "credit_card",
       "critical_illness_insurance",
@@ -9474,7 +9475,6 @@
       "mutual_funds",
       "nps",
       "personal_accident_insurance",
-      "personal_loan",
       "savings_account",
       "savings_plan",
       "term_plan",
@@ -9530,11 +9530,11 @@
     "url": "https://www.au.bank.in/blogs/salary-account-features-for-fresh-graduates",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
       "debit_card",
       "internet_banking",
       "mobile_banking",
-      "personal_loan",
       "salary_account"
     ],
     "summary": "A guide for fresh graduates outlining common salary account features: zero-balance requirements, automatic salary credits, debit card use, mobile and internet banking, possible links to loan and credit-card eligibility, value-added services, and what may happen after a job change or missed salary credits. It can help answer what features graduates may encounter and what to check with their bank. The article describes general practices and advises checking current bank policies; it does not establish specific AU Bank terms."
@@ -10117,8 +10117,8 @@
     "url": "https://www.au.bank.in/blogs/role-of-salary-accounts-in-building-credit-history",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
-      "personal_loan",
       "salary_account"
     ],
     "summary": "Explains how salary accounts may indirectly support credit history through regular salary deposits, responsible account management, and access to credit facilities. It clarifies that a salary account itself does not directly build credit history, and discusses how timely repayments on credit cards or loans can help. Answers questions about the role of salary accounts in creditworthiness, loan eligibility, and getting started with credit."
@@ -10159,8 +10159,8 @@
     "url": "https://www.au.bank.in/blogs/how-corporates-can-benefit-from-salary-account-tie-ups-with-banks",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "home_loan",
-      "personal_loan",
       "salary_account",
       "vehicle_loan"
     ],
@@ -11015,10 +11015,10 @@
     "url": "https://www.au.bank.in/blogs/3-banking-tricks-boost-savings",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
       "debit_card",
       "fixed_deposit",
-      "personal_loan",
       "savings_account"
     ],
     "summary": "A short article outlining three ways to boost savings: compare interest rates on savings accounts and fixed deposits, use debit- or credit-card cashback rewards, and prioritize repayment of high-interest debt. It can answer what banking strategies the article recommends for growing savings and how cashback or debt repayment may contribute. The article gives illustrative examples but does not provide current product rates or terms."
@@ -11297,13 +11297,13 @@
     "url": "https://www.au.bank.in/blogs/how-you-can-retire-early-by-saving-money",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "car_insurance",
       "car_loan",
       "fixed_deposit",
       "health_insurance",
       "home_loan",
       "life_insurance",
-      "personal_loan",
       "savings_account"
     ],
     "summary": "This blog explains how to plan and save for early retirement: estimate future expenses and investment returns, set savings targets, assess current finances, budget and invest, obtain insurance, and repay debts. It promotes AU Small Finance Bank savings accounts, mentioning high interest rates, monthly interest payouts, and online account opening. The page can answer questions about the planning steps and financial products the article discusses for pursuing early retirement."
@@ -11879,11 +11879,11 @@
     "url": "https://www.au.bank.in/blogs/difference-between-commercial-and-small-finance-bank",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "current_account",
       "fixed_deposit",
       "gold_loan",
       "msme_loan",
-      "personal_loan",
       "recurring_deposit",
       "savings_account",
       "vehicle_loan"
@@ -11932,7 +11932,7 @@
     "url": "https://www.au.bank.in/blogs/why-does-your-credit-score-go-down",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how personal loans can affect a credit score positively or negatively. Covers on-time and missed EMI payments, debt consolidation, credit mix, pre-closing a loan, and the effect of taking on more debt relative to income. Answers questions about why a credit score may rise or fall in connection with personal loans."
   },
@@ -11992,7 +11992,7 @@
     "url": "https://www.au.bank.in/blogs/understanding-relationship-interest-rates-personal-loan-terms",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "An educational article explaining how interest rates relate to personal loan costs, monthly payments, affordability, and loan terms. It compares fixed and variable rates, describes factors that may affect rates (including credit score, loan amount and duration, income, debt-to-income ratio, and market conditions), and discusses unsecured loans, comparing offers, negotiating terms, and repayment planning. It can answer general questions about these topics but provides no specific rates or loan offer details."
   },
@@ -12054,12 +12054,12 @@
     "url": "https://www.au.bank.in/blogs/building-credit-young-adults-2024",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "consumer_loan",
       "credit_card",
       "fixed_deposit",
       "home_loan",
-      "personal_loan",
       "savings_account",
       "vehicle_loan"
     ],
@@ -12192,7 +12192,7 @@
     "url": "https://www.au.bank.in/blogs/tips-for-personal-loan-applications-in-2024",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A guide to preparing for a personal loan application in 2025. It discusses checking credit, assessing affordability, comparing lenders, gathering documents, limiting applications, reviewing loan terms, considering optional loan protection insurance, and maintaining accurate financial information. The page can answer questions about steps that may help applicants prepare and improve their chances of approval; it does not provide specific AU Bank loan rates or terms."
   },
@@ -12767,8 +12767,8 @@
       "au_current_account",
       "au_digital_current_account",
       "au_power_current_account",
-      "au_vishesh_account",
-      "royale_business_account"
+      "au_royale_business_account",
+      "au_vishesh_account"
     ],
     "summary": "A September 2023 article about AU Small Finance Bank current accounts. It describes account features and benefits, including cash deposit limits, balance requirements, transaction access, digital banking, and selected account-specific features. It also outlines ways to apply, required documents, and two options described as having no minimum average monthly balance. This page can help answer questions about current account features, opening steps, documentation, and balance requirements."
   },
@@ -14544,9 +14544,9 @@
     "url": "https://www.au.bank.in/blogs/use-entire-credit-card-limit",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
-      "line_of_credit",
-      "personal_loan"
+      "line_of_credit"
     ],
     "summary": "Blog discussing the pros and cons of using an entire credit card limit, including credit utilization, credit score impacts, debt and overspending risks, and responsible-use tips. It can answer questions about the potential consequences of maxing out a card, managing utilization and repayment, and considering personal loans or lines of credit as alternatives. No specific rates or product terms are provided."
   },
@@ -14968,8 +14968,8 @@
     "url": "https://www.au.bank.in/blogs/difference-between-credit-card-and-personal-loan",
     "category": "blogs",
     "product": [
-      "credit_card",
-      "personal_loan"
+      "au_personal_loan",
+      "credit_card"
     ],
     "summary": "This blog compares credit cards and personal loans, covering how funds are accessed, borrowing flexibility, interest-rate differences in general terms, repayment structures, typical uses, potential credit-score impacts, approval processes, and suitability for unexpected versus planned expenses. It can help readers understand how the two borrowing options differ; it does not provide specific AU Bank rates or terms."
   },
@@ -16724,10 +16724,10 @@
     "url": "https://www.au.bank.in/blogs/building-credit-young-adults-2025",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
       "fixed_deposit",
       "home_loan",
-      "personal_loan",
       "savings_account",
       "vehicle_loan"
     ],
@@ -17132,7 +17132,7 @@
     "url": "https://www.au.bank.in/blogs/using-instant-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post outlining nine ways to use an instant personal loan responsibly, including assessing need and repayment capacity, understanding loan terms and fees, budgeting for EMIs, avoiding multiple loans, maintaining emergency savings and credit health, considering early repayment, and contacting the lender if repayment becomes difficult. It can answer questions about responsible borrowing practices and which loan costs and repayment considerations to review. The page also includes a brief AU Personal Loan promotion; it does not provide specific rates or loan terms."
   },
@@ -17498,10 +17498,10 @@
     "url": "https://www.au.bank.in/blogs/different-types-of-retail-loans-that-come-with-income-tax-benefits",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "education_loan",
-      "home_loan",
-      "personal_loan"
+      "home_loan"
     ],
     "summary": "Blog discussing potential income-tax benefits associated with home, higher education, personal, and car loans in India. It outlines deductions or tax treatment described under Sections 24(b), 80C, 80EEA, 80E, and 43B, including conditions related to loan use and property or vehicle purpose. The page can help identify which loan types may have tax benefits and what conditions the article describes. It notes that tax rules change and advises readers to verify details and consult a tax advisor."
   },
@@ -17612,8 +17612,8 @@
     "url": "https://www.au.bank.in/blogs/how-not-to-fall-into-debt-trap",
     "category": "blogs",
     "product": [
-      "home_loan",
-      "personal_loan"
+      "au_personal_loan",
+      "home_loan"
     ],
     "summary": "A blog about avoiding loan burdens and debt traps. It discusses assessing repayment capacity, choosing an appropriate loan, comparing rates and fees, maintaining credit health, managing existing debts, building emergency savings, adjusting tenure, paying EMIs on time, refinancing or consolidating, and seeking financial advice. It can answer questions about ways to manage borrowing and repayments to reduce financial stress."
   },
@@ -17621,7 +17621,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-check-your-personal-loan-statement",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how to check a personal loan statement through online banking, a mobile banking app, email, a bank branch, or customer service. Describes typical statement contents, including outstanding balance, EMI details, interest rate, repayment schedule, fees, and loan term, and why regular reviews can help track repayments and identify discrepancies. Answers how to access a statement, what it contains, and why to check it regularly."
   },
@@ -17629,8 +17629,8 @@
     "url": "https://www.au.bank.in/blogs/line-of-credit-vs-personal-loan",
     "category": "blogs",
     "product": [
-      "line_of_credit",
-      "personal_loan"
+      "au_personal_loan",
+      "line_of_credit"
     ],
     "summary": "A blog comparing lines of credit with personal loans. It explains their borrowing and repayment structures, general interest-rate approaches, flexibility, advantages and disadvantages, and when each may suit ongoing or uncertain expenses versus a one-time expense. It can answer questions about how the two borrowing options differ and what factors to consider when choosing between them. The page also briefly promotes AU Personal Loans."
   },
@@ -17646,7 +17646,7 @@
     "url": "https://www.au.bank.in/blogs/get-peronal-loan-without-cibil-score",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "AU Small Finance Bank blog explains options for getting a personal loan without a CIBIL score, including how lenders may assess income, employment, bank history, and documentation. It distinguishes new-to-credit applicants from borrowers with low scores, offers application and credit-building guidance, and describes AU Bank’s personal loan application channels and eligibility caveat. Answers questions about documents, guarantors, alternatives, credit-score effects, and building a CIBIL history."
   },
@@ -17692,7 +17692,7 @@
     "url": "https://www.au.bank.in/blogs/tips-for-personal-loan-applications-in-2025",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A 2025 guide to preparing for a personal loan application. It covers checking credit and affordability, comparing lenders and loan options, gathering documents, avoiding multiple applications, reviewing loan terms, considering optional loan protection insurance, and maintaining accurate financial information. The page can answer questions about steps that may help applicants prepare and improve their chances of approval; it does not provide specific loan rates or terms."
   },
@@ -17700,7 +17700,7 @@
     "url": "https://www.au.bank.in/blogs/rbi-guidelines-for-personal-loan-recovery",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining RBI-related guidance for personal loan recovery in India. It covers fair practices, written notice and recovery-agent conduct, borrower complaint and escalation options, debt collection policies, and disclosure of recovery practices. Useful for questions about borrower protections and how to raise concerns about personal loan recovery."
   },
@@ -17708,7 +17708,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-noc-meaning-its-importance",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains what a Personal Loan No Objection Certificate (NOC) is, why it matters after full repayment, and how to request one from the lender. Covers its role as evidence of loan closure, potential release of pledged collateral, and possible use in future financial transactions. Describes the request, documentation, verification, and issuance steps. Answers questions about what a personal loan NOC means, why borrowers may need it, and how to obtain it."
   },
@@ -17716,7 +17716,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-get-a-personal-loan-without-visiting-the-branch",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A step-by-step guide to applying for a personal loan online without visiting a branch. Covers comparing lenders and loan options, eligibility and documents, completing and submitting an application, approval, electronic signing, fund disbursement, and online loan management. It can answer questions about the typical steps and requirements for a branch-free application; it does not provide specific rates or loan terms."
   },
@@ -17724,7 +17724,7 @@
     "url": "https://www.au.bank.in/blogs/what-happens-to-a-personal-loan-incase-of-death-of-the-borrower",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog discussing uses of personal loans beyond emergencies, including debt consolidation, home improvements, education and career advancement, travel, and wedding expenses. It can answer what purposes the article describes for using a personal loan. The excerpt does not discuss what happens to a loan after a borrower’s death, despite the URL."
   },
@@ -17732,7 +17732,7 @@
     "url": "https://www.au.bank.in/blogs/benefits-of-personal-loan-for-bank-employees",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post describing personal-loan benefits for AU Bank employees, including competitive rates, digital application and management through AU 0101, debt consolidation, possible pre-approved offers for eligible existing customers, and preferential terms for Royale customers. It can answer what benefits the article discusses and how employees may manage or use a personal loan. No specific interest rates or eligibility criteria are provided."
   },
@@ -17786,7 +17786,7 @@
     "url": "https://www.au.bank.in/blogs/tips-salaried-employees-qualify-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog offering tips for salaried employees in India to improve personal loan eligibility. It discusses credit scores, lender eligibility criteria, proof of income, debt-to-income ratio, choosing a suitable loan amount, avoiding multiple applications, employment stability, outstanding debts, documentation, and co-applicants or guarantors. The page can answer questions about factors lenders may consider and steps borrowers can take before applying; it does not specify AU Bank loan rates or terms."
   },
@@ -17794,7 +17794,7 @@
     "url": "https://www.au.bank.in/blogs/maximum-minimum-personal-loan-tenure",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining maximum and minimum personal loan tenures, factors that may influence them, and trade-offs between longer and shorter repayment periods. It discusses monthly affordability, interest savings, repayment capacity, financial goals, and total borrowing cost. Can answer general questions about how tenure affects repayments and what to consider when choosing a personal-loan tenure; it does not specify AU Small Finance Bank’s actual tenure limits or rates."
   },
@@ -17802,7 +17802,7 @@
     "url": "https://www.au.bank.in/blogs/collateral-free-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains collateral-free (unsecured) personal loans, including how lenders assess eligibility, potential advantages and considerations, and use cases such as emergencies, debt consolidation, and home improvements. Useful for questions about what these loans are and what to weigh before choosing one; it does not provide specific rates or loan terms."
   },
@@ -17826,7 +17826,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-building-credit-a-step-toward-financial-stability",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining how a personal loan may help build credit in India through credit-mix diversification, timely payments, lower credit utilization when consolidating card debt, and a longer credit history. It also discusses responsible borrowing, late payments, and default risks. Answers questions about potential credit-building benefits and cautions; it does not provide AU Bank loan terms."
   },
@@ -17834,7 +17834,7 @@
     "url": "https://www.au.bank.in/blogs/can-you-take-a-personal-loan-to-clear-your-credit-card-debt",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "The blog discusses whether a personal loan can be used to pay off credit card debt. It outlines potential benefits such as lower interest, fixed payments, structured repayment and possible credit-score improvement, alongside considerations including fees, loan amount, credit-score effects and avoiding new card debt. It can help answer when this debt-consolidation approach may be worth considering and what to assess before proceeding."
   },
@@ -17850,7 +17850,7 @@
     "url": "https://www.au.bank.in/blogs/avoid-common-personal-loan-mistakes",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog outlining ten common personal loan mistakes, including borrowing more than needed, failing to compare rates or account for fees, overlooking credit scores and loan terms, missing payments, borrowing for risky investments, and taking on debt without a repayment plan or emergency savings. It also suggests considering alternatives. The page can answer what borrowing and repayment pitfalls the article advises readers to avoid and what factors to consider before taking a personal loan. It does not provide specific interest rates."
   },
@@ -17858,7 +17858,7 @@
     "url": "https://www.au.bank.in/blogs/debt-consolidation-personal-loans-guide",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Guide to using a personal loan to consolidate multiple debts. Explains how consolidation works, compares it with a credit-card balance transfer, and covers who may benefit, typical eligibility factors and documents, potential credit-score effects, risks, and application steps. Includes an illustrative EMI comparison and FAQs about credit scores, eligible debts, loan amounts, and fees. Figures are examples, not AU Bank offers."
   },
@@ -17922,7 +17922,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-education-financing-funding",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A general guide to using personal loans to fund education expenses. It describes potential advantages, factors to compare before borrowing, application steps, and advice on budgeting and repayment. The page can help answer questions about how personal loans may be used for education, what to consider before applying, and how to manage the funds and repayments. It does not provide specific AU Bank loan terms or rates."
   },
@@ -17949,7 +17949,7 @@
     "url": "https://www.au.bank.in/blogs/consequences-and-solutions-of-not-paying-personal-loan-in-india",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains the escalation and consequences of personal loan default in India, including missed-EMI stages, potential credit-score impacts, civil and cheque-bounce legal proceedings, and recovery-agent rules. Covers possible responses such as contacting the lender, restructuring, moratoriums, and one-time settlement, plus credit-score recovery steps. Answers questions about arrest, salary attachment, loan write-off versus settlement, and reporting recovery-agent harassment."
   },
@@ -17957,7 +17957,7 @@
     "url": "https://www.au.bank.in/blogs/ways-and-things-to-consider-closing-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining ways to close a personal loan, including repayment over the agreed tenure and prepayment before it ends. It discusses pre-closure terms and charges, possible closure fees, documents such as an NOC and loan closure letter, the loan closure certificate, and potential credit-score effects. The page can answer what to consider and what documentation may be needed when closing a personal loan."
   },
@@ -17965,7 +17965,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-approval-process-timeline",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining the personal loan approval timeline and the steps involved: checking eligibility and credit score, submitting and verifying documents, loan review and approval, and disbursal. It says the process may take from a few hours to a few days, depending on lender policies and the borrower’s application. The page can answer what factors affect approval timing and what borrowers can prepare to help avoid delays."
   },
@@ -17997,7 +17997,7 @@
     "url": "https://www.au.bank.in/blogs/what-is-pre-approved-loan-and-how-to-get-one",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains what a pre-approved personal loan is, who may be eligible, how to check for and apply to an offer through NetBanking or the mobile app, and what to review before applying. It discusses interest rates, EMIs, fees and repayment charges, and says AU Small Finance Bank offers eligible existing customers preferential rates and no documentation. The page can answer basic questions about pre-approved personal loans and the application process; it does not specify exact rates or charges."
   },
@@ -18005,7 +18005,7 @@
     "url": "https://www.au.bank.in/blogs/what-is-pre-approved-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan",
+      "au_personal_loan",
       "pre_approved_personal_loan"
     ],
     "summary": "Explains what a pre-approved personal loan is, who may be eligible, how eligibility is communicated and checked, and how to apply through a bank’s NetBanking portal or mobile app. Covers interest rates in general terms and lists costs and documents to review before accepting an offer. The article also describes AU Small Finance Bank’s offer for eligible existing customers, including preferential rates and no documentation, without specifying rates or loan terms."
@@ -18027,7 +18027,7 @@
     "url": "https://www.au.bank.in/blogs/what-are-eligibility-criteria-for-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining personal loan eligibility criteria, including age, employment experience, income, residence, credit history and existing debt. It describes checking eligibility using a lender’s calculator, ways to improve eligibility, and FAQs about approval, loan amount, fees, guarantors and collateral. The page notes that criteria vary by lender and discusses AU Small Finance Bank’s stated maximum application amount. It can answer general questions about factors that influence personal loan eligibility and how to assess or improve it."
   },
@@ -18035,9 +18035,9 @@
     "url": "https://www.au.bank.in/blogs/can-you-get-a-personal-loan-with-a-low-credit-score",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
-      "fixed_deposit",
-      "personal_loan"
+      "fixed_deposit"
     ],
     "summary": "This blog explains how a low credit score can affect personal loan applications, options for finding a lender, and points to check when comparing lenders, including credibility and how interest rates are presented. It also offers tips for improving a credit score, such as paying credit card balances in full, using a secured credit card, and avoiding repeated loan applications. The page can answer questions about obtaining a personal loan with a low CIBIL score, choosing a lender, and credit habits that may help improve a score."
   },
@@ -18045,7 +18045,7 @@
     "url": "https://www.au.bank.in/blogs/should-you-apply-for-a-personal-loan-online-or-offline",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog comparing online and offline personal loan applications, including application steps, potential advantages and drawbacks, and how EMI and tenure choices affect repayments. It also discusses loan uses and types, borrowing limits, documentation, foreclosure charges, fees, approval, and eligibility. Useful for finding information on how to apply and what the article says about personal loan requirements and repayment."
   },
@@ -18053,8 +18053,8 @@
     "url": "https://www.au.bank.in/blogs/gold-loan-vs-personal-loan-how-to-choose-between-the-two-for-meeting-your-needs",
     "category": "blogs",
     "product": [
-      "gold_loan",
-      "personal_loan"
+      "au_personal_loan",
+      "gold_loan"
     ],
     "summary": "Compares gold loans and personal loans, discussing collateral, disbursement, documentation, income and stability requirements, credit score, and tradeoffs such as borrowing limits or risk of losing pledged gold. Helps readers assess which loan type may suit their circumstances, particularly if they cannot demonstrate stable income. The article is dated December 17, 2019."
   },
@@ -18062,7 +18062,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-get-qualified-for-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A 2019 blog post offering general tips for improving personal loan application approval prospects. It discusses checking lender-specific eligibility requirements, credit scores, co-borrowers, loan tenure and EMI affordability, required documents, and residential and employment or business stability. It can help answer what factors the article says may affect personal loan eligibility and what applicants can prepare; it does not provide current AU Bank-specific terms or rates."
   },
@@ -18086,7 +18086,7 @@
     "url": "https://www.au.bank.in/blogs/how-does-personal-loan-affect-your-credit-score",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how personal-loan repayment behavior may affect a credit score, including timely EMI payments, missed payments, debt consolidation, credit mix, loan foreclosure, and debt-to-income ratio. It can answer questions about potential positive and negative credit-score effects of taking or repaying a personal loan. The page also advises researching before borrowing and paying EMIs and credit-card bills on time."
   },
@@ -18094,9 +18094,9 @@
     "url": "https://www.au.bank.in/blogs/tips-to-improve-your-cibil-score-immediately",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
-      "fixed_deposit",
-      "personal_loan"
+      "fixed_deposit"
     ],
     "summary": "Article explaining how CIBIL scores affect loan eligibility and offering ways to improve a low score, including timely payments, reducing credit card balances, monitoring credit reports, and limiting new credit applications. It discusses getting and choosing a personal-loan lender with a low score, using a secured credit card, and checking CIBIL scores. FAQs cover score requirements, what counts as a good score, score changes, and how long improvement may take."
   },
@@ -18110,10 +18110,10 @@
     "url": "https://www.au.bank.in/blogs/credit-history-can-get-better-personal-loan-terms",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "credit_card",
-      "home_loan",
-      "personal_loan"
+      "home_loan"
     ],
     "summary": "Blog article explains how credit history can affect personal loan eligibility and terms. It covers repayment history, credit utilization, loan applications and inquiries, and credit mix, with home loans, car loans, credit cards, and personal loans as examples. It describes possible benefits of a strong history and suggests ways to improve it. The page can answer questions about how credit history relates to personal loan terms and what habits may help strengthen a credit profile."
   },
@@ -18129,7 +18129,7 @@
     "url": "https://www.au.bank.in/blogs/what-is-a-multipurpose-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how a personal loan can be used for varied planned or unexpected expenses, including weddings, travel, medical costs, debt consolidation, renovations, and education. Describes its general flexibility, unsecured nature, repayment-tenure options, and application steps. This page can answer what a multipurpose loan means in this context, common uses of a personal loan, its stated advantages, and how to apply."
   },
@@ -18153,7 +18153,7 @@
     "url": "https://www.au.bank.in/blogs/ideal-age-in-India-to-get-a-home-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Despite the URL and heading referring to the ideal age for a home loan, the excerpt discusses how to change the EMI payment date for a personal loan. It outlines checking lender policies, choosing a date, applying through support or banking channels, providing documents, checking for charges, confirming the revised schedule, and updating auto-debit instructions. It can answer what steps and considerations are involved in requesting a personal-loan EMI date change."
   },
@@ -18161,7 +18161,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-change-the-emi-date-for-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post dated 30 November 2024 outlines general steps for requesting a change to a personal-loan EMI date: check the lender’s policy, choose a suitable date, contact customer support, submit an application and any requested documents, confirm possible charges, verify the revised schedule, and update auto-debit instructions. It also advises planning ahead and maintaining sufficient account funds. The page can help answer how to request an EMI-date change and what to consider; it does not specify AU Bank’s applicable fees or exact policy."
   },
@@ -18169,7 +18169,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-calculate-personal-loan-emi-using-excel",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A guide to calculating personal loan EMIs in Excel, covering the EMI formula, the Excel PMT function, an example calculation, and ways to compare repayment scenarios or build an amortization schedule. It also mentions online personal loan EMI calculators as an alternative. The page can answer how to calculate a personal loan EMI in Excel and what inputs the calculation requires."
   },
@@ -18177,7 +18177,7 @@
     "url": "https://www.au.bank.in/blogs/how-career-graph-impacts-personal-loan-eligibility",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog explains how a borrower’s career graph can affect personal loan eligibility. It discusses employment stability, professional growth, industry and employer reputation, income consistency, and future earning potential, and suggests ways to strengthen an application, such as documenting promotions, salary changes, employment history, and income. It can answer questions about which career-related factors lenders may consider and what supporting information applicants can provide."
   },
@@ -18202,7 +18202,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-vs-top-up-loan",
     "category": "blogs",
     "product": [
-      "personal_loan",
+      "au_personal_loan",
       "top_up_loan"
     ],
     "summary": "A blog comparing personal loans and top-up loans, covering their general characteristics, eligibility, loan amounts, tenure, application paperwork, and situations in which each may be suitable. It can answer questions about how the two loan types differ and when a borrower might consider one; it does not provide specific rates or offer terms."
@@ -18211,7 +18211,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-without-itr",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explains personal loans without ITR, including potential borrower types, alternative income and identity documents, and a general application and verification process. It can answer what evidence may support repayment capacity when ITR is unavailable and what steps applicants may take. The page also includes a brief AU Personal Loan promotion but provides no specific rates or terms."
   },
@@ -18219,8 +18219,8 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-vs-overdraft",
     "category": "blogs",
     "product": [
-      "overdraft",
-      "personal_loan"
+      "au_personal_loan",
+      "overdraft"
     ],
     "summary": "Compares personal loans and overdrafts, including how funds are accessed, repayment, interest, tenure, eligibility, and typical uses. Explains which may suit planned larger expenses versus short-term, fluctuating cash needs, and mentions using a personal loan EMI calculator. Can answer how the products differ and what factors to consider when choosing between them."
   },
@@ -18228,7 +18228,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-against-salary",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A brief guide to getting an unsecured personal loan based on salary. It outlines eligibility checks, salary and other document requirements, the approval and disbursement steps, and tips for improving approval chances. It also introduces interest-rate considerations but gives no specific rates. The page can answer questions about the general application process and ways to strengthen a salary-based personal loan application."
   },
@@ -18236,7 +18236,7 @@
     "url": "https://www.au.bank.in/blogs/debt-to-income-ratio-and-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining the debt-to-income (DTI) ratio and its relationship to personal loans. It defines DTI, shows how to calculate it, describes how lenders may consider it for loan eligibility and terms, gives indicative DTI ranges, and suggests ways to lower the ratio. It can answer questions about what DTI means, how to calculate it, how it may affect a personal-loan application, and how to improve it."
   },
@@ -18244,7 +18244,7 @@
     "url": "https://www.au.bank.in/blogs/factors-affecting-personal-loan-eligibility",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explains eight factors that can affect personal loan eligibility: credit score, income, employment status, debt-to-income ratio, age, work experience, existing liabilities, and requested loan amount and tenure. It also describes using a personal loan EMI calculator to estimate monthly payments and plan affordability. The page can answer what lenders may consider when assessing eligibility and how loan terms and existing debts may influence an application."
   },
@@ -18276,7 +18276,7 @@
     "url": "https://www.au.bank.in/blogs/tips-to-get-personal-loan-without-salary-slip",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining how self-employed people and freelancers may apply for a personal loan without a salary slip. It discusses income-document alternatives, factors lenders may consider (such as credit score, income, occupation, and existing debt), and general application steps with AU Small Finance Bank. It can answer questions about documents to prepare, possible eligibility considerations, and how to apply. The page gives general guidance rather than specific loan terms."
   },
@@ -18284,7 +18284,7 @@
     "url": "https://www.au.bank.in/blogs/what-is-personal-loan-sanction-letter",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains what a personal loan sanction letter is, what details it typically contains, why borrowers may need it, and which identity, address, and income documents may be requested during the loan sanction process. The page can answer questions about the purpose and contents of a personal loan sanction letter and the documents associated with applying for a personal loan."
   },
@@ -18292,7 +18292,7 @@
     "url": "https://www.au.bank.in/blogs/track-personal-loan-application-status",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains why applicants may want to track a personal loan application and describes two general methods: checking an online status portal and contacting customer service by phone. Covers information to prepare, reference numbers, and avoiding repeated calls. Answers how to monitor a personal loan application and what to consider while waiting; it does not provide specific AU Bank contact details or processing timelines."
   },
@@ -18336,7 +18336,7 @@
     "url": "https://www.au.bank.in/blogs/short-term-vs-long-term-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains the trade-offs between short- and long-term personal loans, including repayment speed, monthly payments, budget flexibility, and time in debt. Covers how to choose a loan term based on budget, loan amount, and future financial plans, and describes using a personal loan EMI calculator to compare tenures and monthly payments. Answers questions about the pros and cons of each term and factors to consider when choosing one."
   },
@@ -18344,7 +18344,7 @@
     "url": "https://www.au.bank.in/blogs/can-you-get-a-second-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan",
+      "au_personal_loan",
       "top_up_loan"
     ],
     "summary": "Explains whether borrowers can take a second personal loan while repaying an existing one, the factors lenders consider (income, current debt, credit score, and repayment history), and why applying through another lender may not change eligibility. It also describes personal-loan top-up loans as an alternative and outlines factors affecting the amount available. Answers questions about second-loan eligibility and top-up borrowing; no specific rates or loan amounts are provided."
@@ -18353,7 +18353,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-home-improvement-projects",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post about using a personal loan to finance home improvement or renovation projects. It discusses possible uses, access to funds, collateral, comparing rates, repayment planning with an EMI calculator, and AU Small Finance Bank’s stated eligibility and application process. Useful for finding out why the article recommends personal loans for renovations and what application and budgeting topics it covers."
   },
@@ -18361,7 +18361,7 @@
     "url": "https://www.au.bank.in/blogs/5-benefits-of-personal-loan-for-newlyweds",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog article outlines five ways newlyweds might use a personal loan: wedding expenses, debt consolidation, setting up a home, honeymoon costs, and emergencies. It also discusses using an EMI calculator, comparing interest rates, and checking eligibility. Answers what expenses the article says a personal loan could help newly married couples manage."
   },
@@ -18448,7 +18448,7 @@
     "url": "https://www.au.bank.in/blogs/what-is-foir-its-effect-on-personal-loan-approval",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains what FOIR (Fixed Obligation to Income Ratio) is, how to calculate it, and how lenders use it when assessing personal loan applications. Covers obligations included in the calculation, factors that affect FOIR, and steps that may help improve it. Answers questions about FOIR’s meaning, formula, effect on approval, and ways to lower it."
   },
@@ -18456,7 +18456,7 @@
     "url": "https://www.au.bank.in/blogs/reasons-why-student-personal-loan-applications-get-rejected",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining common reasons student personal loan applications may be rejected: limited credit history, insufficient income, high debt-to-income ratio, lack of collateral or a guarantor, application errors or missing documents, poor credit score, and missing co-signer consent. It can answer questions about factors that may affect approval and steps students can take to address them."
   },
@@ -18464,7 +18464,7 @@
     "url": "https://www.au.bank.in/blogs/plan-luxury-travel-with-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post outlines steps for planning luxury travel financed with a personal loan: estimate trip costs, compare lenders and loan options, apply, allocate funds, plan the vacation, and repay on time. It can answer what planning and repayment considerations the article recommends when using a personal loan for travel. It does not provide specific rates or loan terms."
   },
@@ -18472,7 +18472,7 @@
     "url": "https://www.au.bank.in/blogs/link-between-personal-loans-financial-freedom",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog article discussing how personal loans may support financial freedom through debt consolidation, investing in education or a business, pursuing growth opportunities, managing emergencies, building credit, and increasing financial flexibility. It emphasizes responsible borrowing, borrowing only what is needed, and having a repayment plan. This page can answer what uses the article suggests for personal loans and what cautions it gives."
   },
@@ -18480,7 +18480,7 @@
     "url": "https://www.au.bank.in/blogs/key-questions-to-ask-yourself-before-applying-for-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog outlining questions to consider before applying for a personal loan: the purpose and affordability of borrowing, credit score, comparing lenders and offers, fees and charges, repayment planning, emergency savings, and whether the expense is a want or a need. It can help readers assess readiness to borrow and make a responsible borrowing decision; it does not provide specific loan rates or terms."
   },
@@ -18488,7 +18488,7 @@
     "url": "https://www.au.bank.in/blogs/applying-for-your-first-personal-loan-points-to-keep-in-mind",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A guide to applying for a first personal loan. It covers assessing borrowing needs, checking credit score, comparing lenders and loan options, reviewing terms and fees, planning repayments, preparing documentation, borrowing within one’s means, and seeking professional advice. The page can answer what to consider before applying for a personal loan and how to prepare for the application."
   },
@@ -18496,7 +18496,7 @@
     "url": "https://www.au.bank.in/blogs/uses-of-personal-loans-beyond-emergency-expenses",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog describing uses of personal loans beyond emergencies: consolidating debt, funding home improvements, education or career advancement, travel, and wedding expenses. It can answer what purposes the article discusses and how a personal loan may be used for them. The page provides no specific rates or loan terms."
   },
@@ -18504,7 +18504,7 @@
     "url": "https://www.au.bank.in/blogs/tips-to-use-a-personal-loan-for-furniture-and-appliances",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog offering tips for using a personal loan to buy furniture and appliances. It covers assessing needs, budgeting, comparing products and financing options, choosing a loan amount and tenure, accounting for extra costs, planning repayments, and using lender benefits. It can answer questions about planning and managing a personal loan for these purchases; it does not provide specific rates or loan terms."
   },
@@ -18512,7 +18512,7 @@
     "url": "https://www.au.bank.in/blogs/precautionary-measures-to-avoid-personal-loan-scams-frauds",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A guide to avoiding personal loan scams and fraud. It covers how to verify a lender, recognize warning signs such as pressure tactics or upfront fees, review loan terms, protect personal information, check contact details and customer feedback, and report suspicious activity. The page can answer questions about precautions to take before applying for a personal loan and how to identify potentially fraudulent lenders."
   },
@@ -18520,7 +18520,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-for-emergency-home-repairs-this-summer",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post dated April 30, 2024, about using personal loans to fund urgent summer home repairs such as roof, HVAC, plumbing, and electrical problems. It discusses potential loan benefits—including quick funding, flexible amounts, no collateral, and fixed rates—and offers guidance on comparing lenders, assessing repayment ability, and reviewing loan terms. It can answer what home emergencies the article covers, how personal loans may help pay for repairs, and what to consider before borrowing."
   },
@@ -18528,7 +18528,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-etiquette-dos-and-donts-for-borrowers",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A borrower guide to personal loan etiquette, covering responsible borrowing, comparing lenders, understanding loan agreements and fees, making timely payments, protecting credit, avoiding simultaneous applications, planning repayments, and communicating with lenders. It can answer questions about recommended dos and don’ts before and during a personal loan. The page does not provide specific interest rates."
   },
@@ -18536,7 +18536,7 @@
     "url": "https://www.au.bank.in/blogs/part-payment-vs-prepayment-vs-pre-closure-of-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains the differences between part payment, prepayment, and pre-closure of a personal loan. Compares their definitions and stated effects on interest, fees, credit score, flexibility, eligibility, and tax benefits. This page can answer questions about how the three options differ and what factors borrowers should consider; applicable terms and charges depend on the lender and loan agreement."
   },
@@ -18544,7 +18544,7 @@
     "url": "https://www.au.bank.in/blogs/know-what-is-personal-loan-amortization-schedule",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains what a personal loan amortization schedule is and its components, including payments, interest, principal repayment, and remaining balance. Describes how borrowers can use it for budgeting, tracking repayment progress, planning early payoff, and considering refinancing. Says the schedule is provided with the Key Fact Statement at disbursal and can also be created with online calculators or spreadsheet software. Answers what the schedule shows, why it is useful, and how to access or create one."
   },
@@ -18552,8 +18552,8 @@
     "url": "https://www.au.bank.in/blogs/loan-against-securities-or-personal-loan-which-is-better",
     "category": "blogs",
     "product": [
-      "loan_against_securities",
-      "personal_loan"
+      "au_personal_loan",
+      "loan_against_securities"
     ],
     "summary": "Compares Loan Against Securities (LAS) and Personal Loans, describing differences in collateral, eligibility, loan amounts, repayment options, and risks. Explains how collateral availability, borrowing needs, repayment preferences, and risk tolerance can inform which option to consider. Answers questions such as how LAS differs from a Personal Loan and what factors to weigh when choosing between them."
   },
@@ -18561,7 +18561,7 @@
     "url": "https://www.au.bank.in/blogs/how-can-a-housewife-get-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog outlines general steps for housewives seeking a personal loan, including reviewing eligibility and documents, assessing repayment capacity, comparing lenders, applying through AU 0101 or a branch, and completing approval and disbursement steps. It also discusses having a spouse act as guarantor or co-borrower. The page can help answer questions about the general application process and considerations for housewives; it does not provide specific rates or detailed AU Bank eligibility terms."
   },
@@ -18569,8 +18569,8 @@
     "url": "https://www.au.bank.in/blogs/difference-between-personal-loan-epf-advance",
     "category": "blogs",
     "product": [
-      "epf_advance",
-      "personal_loan"
+      "au_personal_loan",
+      "epf_advance"
     ],
     "summary": "Compares personal loans and EPF advances by eligibility, repayment, interest charges, and effects on credit and retirement savings. This blog can help answer how the two funding options differ and what considerations may matter when choosing between them."
   },
@@ -18764,7 +18764,7 @@
     "url": "https://www.au.bank.in/blogs/finance-big-purchases-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A Feb. 21, 2024 blog outlines steps for using a personal loan to fund a major purchase, including assessing affordability, comparing loan options, seeking pre-approval, choosing an amount, reviewing terms, applying, and managing repayments and spending. It can help answer questions about how to plan and apply for a personal loan for a large expense. The page also links to a personal loan EMI calculator and eligibility information."
   },
@@ -18772,7 +18772,7 @@
     "url": "https://www.au.bank.in/blogs/enjoy-dream-summer-vacation-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post about using a personal loan to fund a summer vacation. It discusses travel expenses, borrowing flexibility, applying for a loan, collateral, repayment schedules and comparing lender offers. It can help identify the general loan considerations the article presents for vacation funding; it does not provide specific rates or terms."
   },
@@ -18780,7 +18780,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-upscaling-career-social-media-influencer",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post discussing ways social media influencers might use a personal loan to invest in equipment, training, a content studio, marketing, branding, and new revenue streams. It advises assessing repayment affordability and potential returns before borrowing. Useful for finding ideas on career-related uses of a personal loan and considerations before taking one; it does not provide loan rates or specific terms."
   },
@@ -18788,7 +18788,7 @@
     "url": "https://www.au.bank.in/blogs/when-should-you-opt-for-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog discusses situations in which a personal loan may be considered, including debt consolidation, emergencies, home renovations, education, weddings, business expenses, major purchases, travel, medical costs, and special occasions. It advises readers to assess repayment capacity, compare lenders’ offers, and consider whether borrowing aligns with their financial goals. The page can help answer what expenses a personal loan might be used for and what to consider before applying."
   },
@@ -18796,7 +18796,7 @@
     "url": "https://www.au.bank.in/blogs/tips-managing-personal-loan-challenging-times",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A guide to managing personal loan repayments during financial hardship. It covers reviewing loan terms, budgeting, contacting the lender, considering repayment modifications or debt consolidation, prioritizing payments, and seeking financial counselling. The page can answer questions about practical steps borrowers may consider when struggling to repay a personal loan."
   },
@@ -18804,7 +18804,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-honeymoon",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Discusses whether to use a personal loan to fund a honeymoon. Covers assessing affordability, estimating trip costs, comparing loan options, planning repayments, understanding debt risks, exploring alternatives such as savings or gifts, and considering long-term financial goals. The page can help answer what to consider before borrowing for a honeymoon; it does not provide specific rates or loan terms."
   },
@@ -18812,7 +18812,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-advice-tips-students-professionals",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog offering personal-loan guidance for students and young professionals. It discusses assessing borrowing needs, comparing lenders and loan terms, checking eligibility, borrowing only what is needed, building credit, using a co-signer or guarantor, and planning repayment. This page can help answer what to consider before applying for a personal loan and how to borrow responsibly."
   },
@@ -18820,8 +18820,8 @@
     "url": "https://www.au.bank.in/blogs/apply-personal-loan-home-loan-together",
     "category": "blogs",
     "product": [
-      "home_loan",
-      "personal_loan"
+      "au_personal_loan",
+      "home_loan"
     ],
     "summary": "A blog post discussing whether it is possible to apply for a personal loan and a home loan simultaneously. It outlines considerations including credit score inquiries, debt-to-income ratio, eligibility criteria, affordability, documentation and processing time, loan terms, and overall financial planning."
   },
@@ -18829,7 +18829,7 @@
     "url": "https://www.au.bank.in/blogs/ideas-take-advantage-personal-loans-money",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog describes possible uses for personal loan funds, including debt consolidation, home improvements, education, emergencies, business expenses, major purchases, travel, weddings, and health costs. It also discusses responsible borrowing and considering repayment ability. It can answer what expenses the article suggests funding with a personal loan and what borrowing considerations it raises."
   },
@@ -18837,7 +18837,7 @@
     "url": "https://www.au.bank.in/blogs/manage-unplanned-expenses-affordable-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post offering general guidance on using a personal loan to manage unplanned expenses. It covers assessing borrowing needs, comparing lenders and loan terms, checking credit, considering secured versus unsecured loans, borrowing only what is needed, planning repayments, and using funds responsibly. The page can help identify steps to consider when evaluating a personal loan for unexpected costs; it does not provide specific rates or loan terms."
   },
@@ -18845,7 +18845,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-managing-large-local-bills",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog discusses using a personal loan to manage large or unexpected bills, including medical expenses, home repairs, and vehicle costs. It describes potential benefits such as access to funds, flexible use, structured repayments, and preserving savings, and compares personal loans with high-interest alternatives. It can help answer how the article suggests personal loans may be used to cover large bills."
   },
@@ -18853,7 +18853,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-manage-emergency-expenses",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post describes how personal loans may help cover unexpected expenses, including medical bills, repairs, and travel costs. It discusses access to funds, flexible use, lack of collateral, scheduled repayments, debt consolidation, preserving savings, and potential credit-building benefits, while advising readers to assess affordability and alternatives. It can answer what uses and considerations the article associates with personal loans for emergencies; it provides no specific rates or loan terms."
   },
@@ -18861,7 +18861,7 @@
     "url": "https://www.au.bank.in/blogs/finance-job-relocation-moving-expenses-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog explains how a personal loan could be used to cover job-relocation and moving expenses. It discusses estimating costs, comparing lenders and loan terms, seeking pre-approval, choosing a loan amount, reviewing the agreement, applying, using disbursed funds, and keeping up with repayments. It can help answer what relocation expenses to consider and what steps to take when financing a move with a personal loan. It does not provide specific rates or loan features."
   },
@@ -18869,7 +18869,7 @@
     "url": "https://www.au.bank.in/blogs/small-personal-loans-to-your-advantage",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog on using small personal loans responsibly. It discusses defining a borrowing purpose, budgeting and choosing an affordable loan amount, comparing lenders and loan terms, maintaining credit, and repaying on time. It also describes potential uses such as emergency expenses, debt consolidation, and investments, and explains how responsible repayment may help build credit history. The page can answer questions about planning and managing a small personal loan; it does not provide specific rates or loan terms."
   },
@@ -18877,8 +18877,8 @@
     "url": "https://www.au.bank.in/blogs/differences-personal-loan-and-mortgage",
     "category": "blogs",
     "product": [
-      "mortgage",
-      "personal_loan"
+      "au_personal_loan",
+      "mortgage"
     ],
     "summary": "Compares personal loans and mortgages by purpose, collateral, loan amounts and repayment terms, interest rates, approval and eligibility, and tax implications. Explains that personal loans are generally unsecured and versatile, while mortgages are secured by property and used for real estate transactions. The page can answer general questions about how these borrowing options differ; it does not provide specific rates or individualized financial advice."
   },
@@ -18886,11 +18886,11 @@
     "url": "https://www.au.bank.in/blogs/types-of-personal-loan-in-india",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "debt_consolidation_loan",
       "festival_loan",
       "home_renovation_loan",
       "medical_loan",
-      "personal_loan",
       "travel_loan",
       "wedding_loan"
     ],
@@ -18900,8 +18900,8 @@
     "url": "https://www.au.bank.in/blogs/business-loan-vs-personal-loan",
     "category": "blogs",
     "product": [
-      "business_loan",
-      "personal_loan"
+      "au_personal_loan",
+      "business_loan"
     ],
     "summary": "Compares business loans and personal loans by purpose and permitted use, qualification criteria, collateral, typical loan amounts, and repayment terms. Explains which loan may suit business expenses versus varied personal needs. Can answer questions about the differences between these loan types and factors to consider when choosing between them."
   },
@@ -18918,7 +18918,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-for-non-urgent-expenses",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how personal loans may be used for planned, non-urgent expenses, including home renovations, education or skill development, travel, small-business ventures, and weddings or celebrations. Emphasizes budgeting, planning, and ensuring repayment is manageable. This page can answer what kinds of non-urgent goals a personal loan may fund and what to consider before borrowing."
   },
@@ -18934,8 +18934,8 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-to-buy-car",
     "category": "blogs",
     "product": [
-      "car_loan",
-      "personal_loan"
+      "au_personal_loan",
+      "car_loan"
     ],
     "summary": "A blog post comparing a personal loan with an auto loan for buying a car. It discusses interest rates, vehicle-choice flexibility, credit-score considerations, loan amounts and repayment terms, ownership, insurance, maintenance, and depreciation. It can help answer what factors to consider when deciding whether to use a personal loan or an auto loan for a car purchase."
   },
@@ -18983,7 +18983,7 @@
     "url": "https://www.au.bank.in/blogs/tips-for-negotiating-lower-interest-rates-on-your-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post offering tips for negotiating a lower personal-loan interest rate, including improving credit, comparing lenders and offers, using an existing lender relationship, considering collateral or a co-signer, and evaluating loan terms. It can answer questions about negotiation strategies, but does not provide specific rates or loan terms."
   },
@@ -18991,7 +18991,7 @@
     "url": "https://www.au.bank.in/blogs/things-to-know-before-applying-for-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog outlines considerations before applying for a personal loan: clarifying your borrowing need, checking your credit score, comparing lenders and offers, choosing a loan amount and term, understanding interest rates and fees, preparing documents, avoiding scams, and reviewing the agreement. It can answer what to consider and prepare before applying for a personal loan. It does not provide specific rates or loan terms."
   },
@@ -18999,7 +18999,7 @@
     "url": "https://www.au.bank.in/blogs/the-impact-of-personal-loans-on-your-financial-health-what-to-consider",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post explaining how personal loans may affect financial health, including budgeting and existing debt, credit score, borrowing costs, loan terms, financial goals, responsible borrowing, and choosing a lender. It can answer what to consider before taking a personal loan and how loan use and repayment may affect finances and credit. No specific rates or loan features are provided."
   },
@@ -19007,7 +19007,7 @@
     "url": "https://www.au.bank.in/blogs/the-connection-between-personal-loans-and-emergency-funds-building-financial-resilience",
     "category": "blogs",
     "product": [
-      "personal_loans"
+      "au_personal_loan"
     ],
     "summary": "Discusses how emergency funds and personal loans can contribute to financial resilience. It explains the purpose and benefits of emergency savings, suggests aiming for three to six months of living expenses, and describes personal loans as a possible supplement when savings cannot cover urgent costs. The page can answer questions about the roles of emergency funds and personal loans in handling unexpected expenses and how the two may work together."
   },
@@ -19015,11 +19015,11 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-for-buying-a-car-alternatives-to-auto-loans",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "auto_loan",
       "credit_card",
       "dealership_financing",
-      "home_equity_line_of_credit",
-      "personal_loan"
+      "home_equity_line_of_credit"
     ],
     "summary": "A blog comparing personal loans with auto loans for buying a car. It discusses personal-loan advantages and considerations, including collateral, flexibility, interest rates, loan terms, credit score, loan amount, and down payment, and outlines dealership financing, home equity lines of credit, and credit cards as alternatives. The page can help answer what factors to compare when choosing car financing and what alternatives to consider; it does not provide specific rates."
   },
@@ -19027,7 +19027,7 @@
     "url": "https://www.au.bank.in/blogs/how-a-personal-loan-can-help-you-achieve-your-financial-goals",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post describing how personal loans may be used for debt consolidation, home improvements, education, medical costs, weddings, travel, business expenses, emergencies, and major purchases. It emphasizes borrowing responsibly and having a repayment plan. This page can answer what financial goals personal loans may help with and what cautions the article recommends; it does not provide specific rates or loan terms."
   },
@@ -19035,8 +19035,8 @@
     "url": "https://www.au.bank.in/blogs/differences-between-personal-loan-and-credit-card-which-is-better-for-short-term-financing",
     "category": "blogs",
     "product": [
-      "credit_card",
-      "personal_loan"
+      "au_personal_loan",
+      "credit_card"
     ],
     "summary": "Compares personal loans and credit cards as short-term financing options, covering borrowing limits, interest rates, repayment periods, monthly payments, and credit score impact. Explains when each may suit a borrower based on financing needs, repayment preferences, and available credit. Answers questions about the differences between personal loans and credit cards and which may be better for short-term financing."
   },
@@ -19104,7 +19104,7 @@
     "url": "https://www.au.bank.in/blogs/managing-missed-personal-loan-emi-payments",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog about what to do after missing a Personal Loan EMI payment. It discusses possible late fees, additional interest and credit-score effects, and steps such as contacting the lender, checking for a grace period, paying promptly, setting up automatic payments, requesting loan restructuring, reviewing a budget, keeping records and monitoring credit reports. It can help readers understand how to respond to a missed EMI and reduce potential repercussions; it does not specify AU Bank fees or grace-period terms."
   },
@@ -19123,11 +19123,11 @@
     "url": "https://www.au.bank.in/blogs/smart-ways-finance-during-tight-budgets",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "credit_card",
       "home_equity_line_of_credit",
       "home_equity_loan",
       "peer_to_peer_loan",
-      "personal_loan",
       "savings_account"
     ],
     "summary": "The blog surveys ways to finance purchases or unexpected expenses on a tight budget, including savings, budgeting, personal loans, credit cards, peer-to-peer lending, home equity borrowing, salary advances, assistance programs, and negotiated payment plans. It emphasizes careful planning and responsible credit use, and notes that AU Small Finance Bank offers personal loans. The page can answer which financing approaches the article suggests and what general considerations it mentions; it does not provide specific rates or detailed product terms."
@@ -19136,7 +19136,7 @@
     "url": "https://www.au.bank.in/blogs/psychology-of-borrowing-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post on the psychology of borrowing personal loans, covering debt anxiety, immediate gratification and long-term consequences, emotional purchases, FOMO, credit scores and self-esteem, debt stress, financial literacy, and using loans toward financial goals. It can answer questions about how borrowing may affect financial behavior and well-being and what considerations support responsible borrowing. No specific rates or loan terms are provided."
   },
@@ -19160,7 +19160,7 @@
     "url": "https://www.au.bank.in/blogs/financing-travel-with-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post weighing the pros and cons of using personal loans to fund travel, including access to funds, flexible use, repayment obligations, interest costs, overborrowing, and potential credit-score effects. It also discusses alternatives such as savings, travel rewards credit cards, budgeting, travel-specific loans, and peer-to-peer lending. The page can help identify considerations when deciding whether to use a personal loan for travel and what other funding options to explore; it does not provide specific rates or loan terms."
   },
@@ -19168,7 +19168,7 @@
     "url": "https://www.au.bank.in/blogs/early-repayment-of-personal-loans-worthwhile",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post weighing the advantages and disadvantages of paying off a personal loan early. It discusses potential interest savings, financial flexibility, credit impact and reduced stress, alongside prepayment penalties, opportunity cost and reduced liquidity. It can help readers consider how loan interest rates, loan terms, emergency savings, investment opportunities and broader financial goals affect an early-repayment decision. No specific rates or repayment terms are provided."
   },
@@ -19208,7 +19208,7 @@
     "url": "https://www.au.bank.in/blogs/10-smart-ways-to-utilize-personal-loans-wisely",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog describing 10 potential uses for a personal loan, including debt consolidation, home renovation, medical expenses, education, weddings, travel, business needs, emergency repairs, and special occasions. It emphasizes evaluating financial needs and repayment capacity. This page can answer what purposes the article suggests for personal loans and what general caution it gives about using them responsibly; it does not provide specific rates or loan terms."
   },
@@ -19256,7 +19256,7 @@
     "url": "https://www.au.bank.in/blogs/when-to-consider-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining when a personal loan may be appropriate, including emergencies, debt consolidation, planned expenses, home improvements, weddings, and education. It describes general benefits such as unsecured borrowing, quick access to funds, fixed rates, and flexible repayment terms, and cautions about debt overload, unstable income, impulsive spending, and lacking an emergency fund. The page can help answer what personal loans may be used for and what to consider before borrowing; it does not provide specific AU Bank loan rates or terms."
   },
@@ -19264,7 +19264,7 @@
     "url": "https://www.au.bank.in/blogs/using-personal-loan-calculators",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how personal loan calculators estimate EMIs and total interest, help assess affordability, and compare loan offers. Covers calculator benefits and usage tips, including entering accurate loan details, considering additional costs, and fitting repayments into broader financial plans. Answers what a personal loan calculator does and how it can support borrowing and budgeting decisions; provides no specific rates or loan terms."
   },
@@ -19280,7 +19280,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-disbursement-process",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining the general personal loan disbursement process, from approval and signing the loan agreement through final verification, choosing a disbursement method, receiving and using funds, and repayment. It describes possible methods (bank deposit, cheque or demand draft, or prepaid card) and notes that disbursement timing varies. The page can answer questions about the steps involved in personal loan disbursement and what to expect after approval."
   },
@@ -19288,7 +19288,7 @@
     "url": "https://www.au.bank.in/blogs/impact-of-interest-rate-changes-on-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how interest rate changes may affect personal loan EMIs, total borrowing costs, affordability, prepayment, and refinancing. Covers factors that can influence rates, including RBI policies, inflation, economic conditions, credit score, and loan amount, plus tips for managing rate changes. This page can answer questions about the potential effects of rate changes on personal loans and factors borrowers may consider; it notes that personal loan rates are typically fixed."
   },
@@ -19296,7 +19296,7 @@
     "url": "https://www.au.bank.in/blogs/future-of-personal-loans-trends-innovations",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog post about trends and innovations shaping the future of personal loans, including digital lending platforms, peer-to-peer lending, alternative credit scoring, personalized loan products, embedded finance, DeFi, ESG lending, and usage-based lending. It explains how these approaches may affect access to credit, loan assessment, borrowing experiences, and repayments. The page can answer questions about emerging personal-loan trends and how they are described in the article; it does not provide specific loan rates or product terms."
   },
@@ -19304,7 +19304,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-home-appliances",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how a personal loan can help finance household appliance upgrades, outlining potential benefits and steps such as estimating costs, checking eligibility, applying, submitting documents, and purchasing appliances after disbursement. The page can answer why someone might use a personal loan for appliances and how to plan and apply. It does not provide specific AU Bank loan rates or terms."
   },
@@ -19392,8 +19392,8 @@
     "url": "https://www.au.bank.in/blogs/improve-credit-score-qualify-better-personal-loan-offers",
     "category": "blogs",
     "product": [
-      "credit_card",
-      "personal_loan"
+      "au_personal_loan",
+      "credit_card"
     ],
     "summary": "A blog explaining how credit scores affect eligibility for personal loan offers and outlining ways to improve a score: check and dispute credit-report errors, pay bills on time, reduce credit-card balances, limit new applications, maintain credit history, become an authorized user, and address debts. It can answer questions about credit-score factors and practical steps to strengthen a credit profile; it does not provide specific loan rates or terms."
   },
@@ -19481,7 +19481,7 @@
     "url": "https://www.au.bank.in/blogs/tips-using-personal-loans-responsibly-borrowing-wisely-avoiding-debt-traps",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog article offering tips for using personal loans responsibly. It discusses assessing affordability, comparing lenders and loan terms, borrowing only what is needed, planning repayments, using loans for purposes such as debt consolidation or emergencies, avoiding predatory lending and unnecessary spending, and reviewing finances. It can help answer questions about responsible borrowing practices and ways to avoid personal-loan debt traps."
   },
@@ -19489,7 +19489,7 @@
     "url": "https://www.au.bank.in/blogs/tips-repaying-personal-loans-faster",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog offering strategies for repaying personal loans faster, including budgeting, prioritizing repayment, making extra or bi-weekly payments, choosing snowball or avalanche repayment methods, negotiating a lower interest rate, increasing income, reducing expenses, and considering refinancing or debt consolidation. It also recommends setting goals, tracking progress, and seeking financial guidance. The page can answer questions about approaches to accelerate personal-loan repayment and manage repayment efforts. It does not provide specific rates or product terms."
   },
@@ -19497,7 +19497,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-investment-opportunities-growing-wealth",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog article about using personal loans to fund investments, including real estate and business ventures. It discusses access to capital, potential benefits, investment risks, loan affordability, interest rates and terms, diversification, repayment planning, and professional advice. The page can answer what investments the article considers suitable for personal-loan funding and what factors it recommends evaluating before borrowing to invest."
   },
@@ -19505,7 +19505,7 @@
     "url": "https://www.au.bank.in/blogs/impact-personal-loans-financial-goals-strategies",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "An article explaining how personal loans may affect financial goals and offering general borrowing strategies. It discusses assessing goals and finances, using loans for debt consolidation, major purchases or unexpected expenses, and considering borrowing costs, affordability, lender comparisons, repayment plans, credit score effects and possible prepayment. It can help identify what to consider when deciding whether and how to use a personal loan; it does not provide specific rates or loan terms."
   },
@@ -19513,7 +19513,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-starting-small-business-financing-entrepreneurial-dreams",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "An article about using personal loans to finance a small business. It covers estimating start-up costs, comparing lenders and loan terms, improving creditworthiness, preparing a business plan and supporting documents, applying, and planning responsible use and repayment. It can answer questions about steps and considerations for seeking a personal loan for entrepreneurial purposes; it does not provide specific loan rates or offers."
   },
@@ -19521,7 +19521,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-expanding-professional-network",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "An article about using personal loans to fund conference and networking-event expenses, such as registration, travel, accommodation, and meals. It discusses potential professional benefits of networking and offers planning guidance on setting objectives, budgeting, comparing loan options, and preparing a repayment plan. This page can answer why someone might consider a personal loan for networking events and what costs and planning factors to consider."
   },
@@ -19529,7 +19529,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-career-development-funding-courses-certifications",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog article about using personal loans to fund career-development courses, certifications, and skill training. It discusses potential benefits and offers guidance on setting goals, comparing courses and lenders, borrowing and repayment planning, checking eligibility and loan terms, and considering other financial aid. The page can help answer questions about why someone might use a personal loan for career development and what to consider before borrowing. It does not provide specific rates or loan terms."
   },
@@ -19537,7 +19537,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loans-business-start-ups",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog article about using personal loans to fund business start-ups. It discusses potential advantages, creditworthiness and affordability considerations, lender research and application steps, repayment terms, budgeting, and building business credit. It can answer general questions about evaluating and managing a personal loan for start-up expenses; it does not provide AU Bank-specific rates or product terms."
   },
@@ -19545,7 +19545,7 @@
     "url": "https://www.au.bank.in/blogs/build-strong-personal-loan-application-tips",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog offering tips for preparing a strong personal loan application. It covers assessing credit and affordability, comparing lenders, gathering documents, improving creditworthiness, providing accurate information, demonstrating stable income, explaining credit history circumstances, and reviewing the application. It can answer questions about how to prepare an application and what factors may support approval; it does not provide specific loan rates or terms."
   },
@@ -19553,7 +19553,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-options-debt-restructuring-consolidating-managing-debts",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining how personal loans may be used to consolidate and restructure multiple debts. It covers assessing existing debts, comparing loan options, applying and paying off debts, budgeting repayments, prioritizing high-interest balances, and seeking professional guidance. It can answer general questions about the debt-consolidation process and debt-management steps, but provides no specific loan rates or terms."
   },
@@ -19561,7 +19561,7 @@
     "url": "https://www.au.bank.in/blogs/hidden-charges-in-personal-loan-agreements",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog outlining potential charges in personal loan agreements: processing, prepayment, late payment, documentation, insurance, and loan cancellation charges. It explains why these fees may apply and suggests reviewing loan terms, requesting clarification, and comparing lenders. The page can answer which additional charges borrowers should look for and how to assess them; it does not provide specific fee amounts."
   },
@@ -19569,8 +19569,8 @@
     "url": "https://www.au.bank.in/blogs/using-personal-loans-for-debt-consolidation-pros-cons",
     "category": "blogs",
     "product": [
-      "credit_card",
-      "personal_loan"
+      "au_personal_loan",
+      "credit_card"
     ],
     "summary": "Explains the potential pros and cons of using a personal loan to consolidate debt. Covers simplified repayments, possible interest savings, fixed repayment periods and credit-score effects, as well as credit requirements, fees, risk of taking on new debt and potentially higher total interest from a longer term. Helps readers assess considerations before choosing this approach; it does not provide specific rates or loan terms."
   },
@@ -19578,7 +19578,7 @@
     "url": "https://www.au.bank.in/blogs/understanding-impact-prepayment-on-personal-loans",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A June 2023 blog explains the potential effects of prepaying a personal loan. It discusses possible interest savings, becoming debt-free sooner, credit-score considerations, prepayment charges, cash-flow planning, interest-rate fluctuations, and partial versus full prepayment options. The page can help answer what borrowers should weigh before prepaying and what costs or practical considerations to discuss with their lender. It does not specify particular rates or fees."
   },
@@ -19586,7 +19586,7 @@
     "url": "https://www.au.bank.in/blogs/tips-for-choosing-right-personal-loan-tenure",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining how to choose a personal loan tenure. It discusses balancing monthly installments and total interest, assessing finances and future plans, managing cash flow, considering prepayment flexibility, and seeking professional advice. Useful for questions about factors to weigh when comparing shorter and longer repayment terms."
   },
@@ -19594,7 +19594,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-wedding-expenses-financing-your-dream-celebration",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog article about using a personal loan to finance wedding expenses, including how funds may be used, potential benefits, and considerations such as borrowing within your means, comparing loan terms, planning repayment, and exploring alternatives. It can answer general questions about financing a wedding with a personal loan, but does not provide specific AU Bank rates or loan terms."
   },
@@ -19602,8 +19602,8 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-medical-expenses-managing-healthcare-costs",
     "category": "blogs",
     "product": [
-      "credit_card",
-      "personal_loan"
+      "au_personal_loan",
+      "credit_card"
     ],
     "summary": "A blog post about using a personal loan to manage medical and healthcare expenses. It discusses quick access to funds, flexible use, predictable repayments, and using a personal loan rather than relying on high-interest credit cards. It also offers tips on assessing costs, comparing loan options, borrowing responsibly, discussing payment options with healthcare providers, and planning for unexpected expenses. The page can help identify topics about financing medical costs; it does not provide specific rates or loan terms."
   },
@@ -19611,7 +19611,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-home-renovation-financing-your-dream-upgrades",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog discussing the use of a personal loan to finance home renovations. It describes potential benefits such as flexible use of funds, quick access, predictable repayments, and avoiding credit-card debt, and offers tips on budgeting, comparing loan terms, assessing repayment capacity, and hiring professionals. It can answer general questions about why someone might consider a personal loan for renovation and how to plan for one. It provides no specific interest rates or loan terms."
   },
@@ -19619,7 +19619,7 @@
     "url": "https://www.au.bank.in/blogs/managing-personal-loan-emi-strategies-for-repayment",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog explaining ways to manage and repay personal loan EMIs, including budgeting, choosing a loan tenure, using EMI calculators, prepayment, avoiding late payments, seeking lender assistance, consolidating debt, and maintaining an emergency fund. It can answer questions about these repayment strategies and how they may support timely repayment and credit health. The page does not provide specific interest rates or loan terms."
   },
@@ -19627,7 +19627,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-calculate-personal-loan-emi-step-by-step-guide",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A step-by-step guide to estimating a personal loan EMI. It explains the required inputs (loan amount, annual interest rate and tenure), converting the rate to a monthly rate, separating interest and principal components, and applying the amortization formula. It also discusses checking calculations and considering prepayment or foreclosure, floating rates, and additional charges. The page can answer how to calculate a personal loan EMI and what factors may affect repayment costs."
   },
@@ -19641,11 +19641,11 @@
     "url": "https://www.au.bank.in/blogs/small-finance-bank-loans-meeting-financial-needs-of-individuals-businesses",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "business_loan",
       "education_loan",
       "home_loan",
-      "msme_loan",
-      "personal_loan"
+      "msme_loan"
     ],
     "summary": "Explains how Small Finance Bank loans may serve individuals and businesses, highlighting financial inclusion, customized loan options, digital applications, speedy disbursement, and support for MSMEs. It discusses MSME financing for working capital, asset acquisition, business expansion, and infrastructure development. This page can answer questions about the article’s general description of SFB lending and the borrower needs it addresses; it does not provide specific rates or loan terms."
   },
@@ -19742,7 +19742,7 @@
     "url": "https://www.au.bank.in/blogs/factors-consider-when-comparing-personal-loan-offers",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains factors to compare when evaluating personal loan offers: interest rates, loan amount and tenure, fees, eligibility, repayment flexibility, customer support, credit score impact, and additional benefits. Can help answer what to consider when comparing offers and how these factors may affect borrowing costs, repayment, and loan approval. It does not provide specific rates or terms for AU Bank personal loans."
   },
@@ -19750,7 +19750,7 @@
     "url": "https://www.au.bank.in/blogs/exploring-personal-loan-insurance-importance-coverage",
     "category": "blogs",
     "product": [
-      "personal_loan",
+      "au_personal_loan",
       "personal_loan_insurance"
     ],
     "summary": "Explains personal loan insurance, including potential coverage for involuntary unemployment, disability, and death, and notes that coverage, limits, exclusions, and terms vary by policy. Discusses whether insurance may be necessary and factors to consider, such as employment stability, existing insurance, savings, and loan size and term. The page can answer questions about the purpose and common coverage types of personal loan insurance and considerations when deciding whether to obtain it."
@@ -19826,7 +19826,7 @@
     "url": "https://www.au.bank.in/blogs/how-much-personal-loan-are-you-eligible-for-based-on-your-salary",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains pre-approved personal loans: what they are, who may be eligible, how existing customers can check offers and apply online, and what to review before borrowing, including the interest rate, EMI, fees, and loan documents. Notes that AU Small Finance Bank offers eligible existing customers preferential rates and no-documentation applications. Answers questions about pre-approved personal loan eligibility, application, and considerations; it does not provide specific rates or loan amounts."
   },
@@ -19834,7 +19834,7 @@
     "url": "https://www.au.bank.in/blogs/7-smart-ways-to-leverage-a-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post discussing how a personal loan may be used for debt consolidation, emergency expenses, major purchases, vacations, and wedding costs. It also covers collateral-free borrowing and how timely repayments may support credit-score management. The page can answer what uses the article suggests for a personal loan and how it frames borrowing as part of financial planning."
   },
@@ -19842,7 +19842,7 @@
     "url": "https://www.au.bank.in/blogs/tips-to-improve-your-personal-loan-eligibility",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post explaining ways to improve personal loan eligibility: repay existing debts, prepare required documents, choose an appropriate loan amount, avoid multiple applications, consider a longer tenure, and report all income sources. It also discusses checking for pre-approved offers and says eligible AU Small Finance Bank customers may receive preferential rates and no documentation. Answers questions about steps that may support loan eligibility and approval."
   },
@@ -19894,7 +19894,7 @@
     "url": "https://www.au.bank.in/blogs/what-can-i-use-a-personal-loan-for",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog explains how AU Small Finance Bank personal loans work and discusses using them for weddings, holidays, home or office renovation, medical expenses, education, gadgets, and debt consolidation. It outlines the collateral-free application and disbursement process, mentions a maximum loan amount of INR 7,50,000 and a 1–5 year term, and describes online and branch application steps. It can answer questions about common personal-loan uses, the basic application process, and eligibility details stated in the article."
   },
@@ -19902,7 +19902,7 @@
     "url": "https://www.au.bank.in/blogs/4-common-reasons-why-your-personal-loan-may-get-rejected",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post explaining four common reasons a personal loan application may be rejected: applying with multiple lenders at once, delayed repayments or high debt, not meeting income criteria, and unstable employment. It advises checking lender eligibility criteria before applying and briefly mentions AU Bank personal loan application channels, a loan amount and tenure range, and an EMI calculator. Answers questions about factors that can lead to rejection and how applicants may reduce that risk."
   },
@@ -19927,7 +19927,7 @@
     "url": "https://www.au.bank.in/blogs/should-you-take-a-personal-loan-to-repay-your-debts",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog article about using a personal loan to repay or consolidate existing debts. It discusses when this approach may make sense, potential benefits such as consolidating payments or obtaining a lower interest rate, and cautions about fixed EMIs, budgeting, spending habits, and avoiding new debt. It can answer questions about the pros, risks, and financial discipline involved in using a personal loan to clear debts."
   },
@@ -19935,7 +19935,7 @@
     "url": "https://www.au.bank.in/blogs/pros-and-cons-of-long-term-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "The blog discusses advantages and disadvantages of choosing a longer personal-loan tenure. It explains that a longer tenure can lower monthly EMIs and ease budgeting, but increases total interest paid and keeps the debt outstanding longer. An example compares one- and five-year repayment of a Rs. 2 lakh loan at 14% p.a. The page can answer questions about these trade-offs and how tenure affects EMI and total repayment; its figures are illustrative, not a current offer."
   },
@@ -19952,7 +19952,7 @@
     "url": "https://www.au.bank.in/blogs/when-is-it-the-ideal-time-to-pre-close-a-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains when pre-closing a loan may be beneficial, including how loan tenure, available savings, tax benefits, and the lender’s policies affect the decision. Covers potential savings and other benefits, possible downsides, and the importance of checking pre-closure terms. Answers questions about whether a personal loan can be pre-closed, when to consider it, and its potential advantages and disadvantages; it does not provide specific rates or bank terms."
   },
@@ -20084,7 +20084,7 @@
     "url": "https://www.au.bank.in/blogs/what-if-your-personal-loan-becomes-npa",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A guide to what may happen when a personal loan becomes overdue and is classified as an NPA. It covers delinquency stages, potential credit-report effects, possible resolution approaches such as restructuring, catching up on payments, settlement, or balance transfer, and borrower questions about arrest, negotiating with a bank, and ignoring notices. The page can help identify information about NPA timelines, consequences, and possible next steps; it does not provide specific loan rates."
   },
@@ -20100,7 +20100,7 @@
     "url": "https://www.au.bank.in/blogs/use-a-personal-loan-for-auto-repair-expenses",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "This blog explains how a personal loan may be used to cover unexpected auto repair expenses. It discusses estimating costs, assessing affordability, comparing lenders, choosing a loan amount, checking credit, applying with supporting documents, reviewing terms, using funds responsibly, making repayments, and considering loan protection. It can help answer questions about steps to consider before borrowing for car repairs. The page does not specify interest rates or particular loan features."
   },
@@ -20128,7 +20128,7 @@
     "url": "https://www.au.bank.in/blogs/rate-of-interest-for-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining personal loan interest rates, including fixed versus variable rates and reducing-balance versus flat-rate calculations. It describes factors that can influence rates—credit score, income and employment, loan amount and tenure, and market conditions—and discusses processing, prepayment, and late-payment charges. It can answer general questions about what affects personal loan rates and what borrowers should compare when evaluating offers. No specific AU Bank interest rate is provided."
   },
@@ -20136,7 +20136,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-terms-and-conditions",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A general guide to personal loan terms and conditions, covering loan amounts and eligibility, interest rates and APR, tenure and repayment frequency, prepayment, fees and late charges, default consequences, and possible security or guarantor requirements. It can help readers identify what to review before signing a personal loan agreement; it does not provide specific rates or AU Bank loan terms."
   },
@@ -20152,7 +20152,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-choose-the-right-tenure-for-your-personal-loan-short-vs-long-term",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog comparing short- and long-term personal loan tenures, including trade-offs in monthly payments, total interest costs, repayment speed, and debt duration. It discusses how to choose a tenure based on income, expenses, financial goals, future obligations, and lender terms. Useful for questions about the pros and cons of each tenure and factors to consider when selecting one; it does not provide specific rates or loan terms."
   },
@@ -20168,7 +20168,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-entrepreneurs",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining how entrepreneurs can use an unsecured personal loan to fund business ventures. It discusses potential benefits, including quick access to funds, no collateral, flexible use, and no equity dilution, along with considerations such as charges, repayment terms, loan amount, creditworthiness, business viability, and personal liability. It can answer questions about the potential advantages and risks of using a personal loan for a startup or small business. No specific rates or loan terms are provided."
   },
@@ -20176,7 +20176,7 @@
     "url": "https://www.au.bank.in/blogs/tips-getting-approved-for-personal-loan-eligibility-requirements",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post offering tips to improve the chances of personal loan approval. It discusses credit scores, income and existing debts, comparing lenders, checking eligibility and loan requirements, preparing documents, using a co-applicant or guarantor, avoiding multiple applications, providing accurate information, and maintaining stable employment and income. It can answer questions about how to prepare for a personal loan application and factors lenders may consider. It does not provide specific AU Bank eligibility thresholds or loan terms."
   },
@@ -20184,7 +20184,7 @@
     "url": "https://www.au.bank.in/blogs/impact-credit-score-personal-loan-approval",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how a credit score may affect personal loan approval, eligibility, offered interest rates, loan amount, and repayment terms. Describes factors used to calculate a credit score and steps to improve it, including paying debts on time, keeping credit utilization low, limiting credit applications, checking credit reports, and building credit history. Answers questions about why lenders consider credit scores and how borrowers can improve their prospects for approval."
   },
@@ -23142,10 +23142,10 @@
     "url": "https://www.au.bank.in/blogs/current-account-a-must-have-for-all-businesses",
     "category": "blogs",
     "product": [
+      "au_royale_business_current_account",
       "current_account",
       "power_current_account",
       "regular_current_account",
-      "royale_business_current_account",
       "vishesh_current_account"
     ],
     "summary": "An overview of AU Small Finance Bank Current Accounts for businesses. The article explains what a Current Account is, describes general features and business uses, and outlines the Royale Business, Regular, Vishesh, and Power account options. It also covers ways to open an account online or at a branch. This page can answer questions about the account types discussed, their stated purposes and selected features, business transaction benefits, and application methods."
@@ -24457,7 +24457,7 @@
     "url": "https://www.au.bank.in/blogs/can-a-personal-loan-be-used-for-higher-education",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog article explaining that personal loans can be used for higher-education costs, including tuition, books, and housing. It discusses potential advantages, such as flexible use and no collateral for most unsecured loans, alongside considerations including interest rates, repayment periods, and credit-score impact. It also recommends exploring scholarships, grants, student loans, and employer assistance. The page can answer whether a personal loan may be used for education and what factors to consider."
   },
@@ -24973,6 +24973,7 @@
     "url": "https://www.au.bank.in/blogs/loans",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "business_loan",
       "car_loan",
       "consumer_durable_loan",
@@ -24980,7 +24981,6 @@
       "gold_loan",
       "home_loan",
       "loan_against_property",
-      "personal_loan",
       "two_wheeler_loan"
     ],
     "summary": "A loan-blog listing covering personal, home, gold, vehicle, business and other loan topics. Articles address eligibility, applications, EMIs, repayment, fees, credit scores, loan comparisons, documentation, and property-related matters. The page can help locate articles on these topics; it is an index rather than detailed product information."
@@ -25523,7 +25523,7 @@
     "url": "https://www.au.bank.in/blogs/how-to-get-an-instant-paperless-personal-loan-online",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains paperless online personal loans, including digital application and verification steps, typical documents, eligibility factors, potential pitfalls, and expected processing times. Answers questions about applying without a branch visit, Aadhaar and video KYC, required documents, disbursement timing, and lender safety."
   },
@@ -25531,7 +25531,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-for-buying-a-laptop",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog post discussing personal loans as a way to finance a laptop. It compares personal loans with store and credit-card EMI schemes, gives illustrative repayment calculations, describes purchase scenarios and application steps, and answers questions about loan use, eligibility, amounts, and processing times. The page can help identify content about financing laptops with a personal loan; figures and claims are presented in the article and are not independently verified here."
   },
@@ -25725,12 +25725,12 @@
     "url": "https://www.au.bank.in/blogs/hard-vs-soft-credit-inquiry",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "car_loan",
       "credit_card",
       "education_loan",
       "home_loan",
-      "overdraft",
-      "personal_loan"
+      "overdraft"
     ],
     "summary": "Explains hard and soft credit inquiries, how they differ in visibility and potential effect on credit scores, what activities trigger each, how long hard inquiries may remain on a report, and ways to limit unnecessary inquiries. FAQs address self-checks, pre-approved offers, loan applications and rejections, unauthorised inquiries, and AU Small Finance Bank inquiries. Loan and credit products are mentioned as examples of applications that may trigger a hard inquiry."
   },
@@ -25815,7 +25815,7 @@
     "url": "https://www.au.bank.in/blogs/current-account-benefits-for-doctors-and-healthcare-professionals",
     "category": "blogs",
     "product": [
-      "au_royale_business_account_doctor",
+      "au_royale_business_account_doctors",
       "current_account"
     ],
     "summary": "Explains why doctors and healthcare practices may use a current account, discussing transaction handling, cash deposits, digital payments, overdrafts, cash-flow visibility, expense management, separation of personal and professional finances, and practice growth. Introduces the AU Royale Business Account Doctor and describes its stated intended audience and general benefits. Covers how to choose a current account, who may benefit, common mistakes, and FAQs about doctors’ banking needs, clinic expenses, and practice expansion."
@@ -25848,12 +25848,12 @@
     "url": "https://www.au.bank.in/blogs/collateral-meaning-types-how-it-works",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "business_loan",
       "gold_loan",
       "loan_against_fixed_deposit",
       "loan_against_property",
       "loan_against_securities",
-      "personal_loan",
       "vehicle_loan"
     ],
     "summary": "Explains what collateral is, how lenders value and secure it, and how it affects secured borrowing. Covers common collateral types, collateral versus security, secured versus unsecured loans, default and recovery processes, loan-to-value ratios, borrower precautions, and FAQs about guarantors, asset reuse, approval, and release of collateral. Useful for questions about how collateral works and the risks and considerations of pledging an asset."
@@ -25989,7 +25989,7 @@
     "url": "https://www.au.bank.in/blogs/what-is-base-rate-personal-loan",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains what the base rate is, how banks calculate it, and how it can affect interest and EMIs on base-rate-linked loans. Compares the base rate with MCLR and repo-linked lending rates, discusses why the base rate was introduced and its relevance to older loans, and addresses whether borrowers can switch benchmarks and who sets or revises the rate."
   },
@@ -25997,7 +25997,7 @@
     "url": "https://www.au.bank.in/blogs/benefits-of-personal-loans-over-salary-advances",
     "category": "blogs",
     "product": [
-      "personal_loan",
+      "au_personal_loan",
       "salary_advance"
     ],
     "summary": "Compares personal loans with salary advances, covering typical loan amounts, repayment periods, costs, usage flexibility, EMI planning, credit reporting, and when a salary advance may suit a small, short-term cash need. FAQs address access speed, credit score effects, eligibility, short-term costs, and uses. The page can help identify factors to compare between the two borrowing options; it does not provide specific AU Bank loan rates or terms."
@@ -26006,9 +26006,9 @@
     "url": "https://www.au.bank.in/blogs/what-is-flat-interest-rate",
     "category": "blogs",
     "product": [
+      "au_personal_loan",
       "car_loan",
-      "home_loan",
-      "personal_loan"
+      "home_loan"
     ],
     "summary": "Explains how flat interest is calculated on the original principal and compares it with reducing-balance interest. Includes formulas and a worked example, discusses pros and cons, and advises comparing effective rates rather than quoted percentages alone. Answers questions about flat versus fixed rates, loan types that may use flat rates, estimating an effective rate, relative interest costs, and asking lenders about repayment structures."
   },
@@ -26016,7 +26016,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-with-720-cibil-score",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explains whether a CIBIL score of 720 may support personal loan approval. It discusses typical lender score thresholds, likely effects on approval chances, rates and loan amount, factors beyond credit score, and steps borrowers can take to strengthen their application. FAQs address minimum scores, hard inquiries, checking a score and whether approval is guaranteed. The page gives general guidance and does not specify a particular lender’s rates or eligibility terms."
   },
@@ -26024,7 +26024,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-cancellation-credit-score-impact",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Blog article explaining how cancelling a personal loan application may affect credit scores at different stages: before a credit inquiry, after inquiry but before disbursal, and after disbursal during a cooling-off period. It covers hard inquiries, cancellation steps, reapplying after cancellation, and related questions about credit reports, defaults, and future eligibility."
   },
@@ -26032,7 +26032,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-emi-bounce-charges",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "A blog explaining personal loan EMI bounces, common causes, potential bounce charges, possible credit-score and collection consequences, and ways to avoid or respond to a failed auto-debit. It discusses typical charge amounts cited in the article, RBI guidance on penal charges and reporting, and whether charges may be waived. It can help answer questions about why an EMI bounces, what may happen after one or repeated missed payments, and what steps borrowers can take after a bounce."
   },
@@ -26040,7 +26040,7 @@
     "url": "https://www.au.bank.in/blogs/personal-loan-on-aadhaar-card",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Explains how Aadhaar-based e-KYC can simplify identity and address verification for personal loan applications, while clarifying that Aadhaar alone does not secure approval. Covers other lender checks and commonly requested documents, the application process, potential benefits, safety cautions, and FAQs about PAN, processing time, and credit scores."
   },
@@ -26048,7 +26048,7 @@
     "url": "https://www.au.bank.in/blogs/crif-vs-cibil-score-differences",
     "category": "blogs",
     "product": [
-      "personal_loan"
+      "au_personal_loan"
     ],
     "summary": "Compares CRIF and CIBIL credit scores, including their 300–900 ranges, data sources, market recognition, and lending uses. Explains why scores may differ, which bureaus lenders may check for personal loans, and ways to check, improve, or dispute credit reports. Answers common questions about score comparisons and personal-loan eligibility."
   },

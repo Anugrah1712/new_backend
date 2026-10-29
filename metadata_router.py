@@ -35,6 +35,9 @@ PRODUCT_CANONICAL_MAP = {
     "fixed_deposits": "fixed_deposit",
     "term_deposit": "fixed_deposit", "term_deposits": "fixed_deposit",
     "au_savings_account": "savings_account",
+    "personal_loan": "au_personal_loan",
+    "personal_loans": "au_personal_loan",
+    "au_personal_loans": "au_personal_loan",
     "green_fd": "green_fixed_deposit",
     "green_fixed_deposits": "green_fixed_deposit",
     "bulk_fd": "bulk_fixed_deposit",
@@ -243,7 +246,8 @@ def is_product_clarification(question):
 PRODUCT_ALIASES = {
     "royal e account": "au_royale_savings_account",
     "royal e": "au_royale_savings_account",
-    "royale account": "au_royale_savings_account",
+    # Royale without an account type is ambiguous: never force savings.
+
     "ivy account": "au_ivy_savings_account",
     "au ivy account": "au_ivy_savings_account",
     "bulk fd": "bulk_fixed_deposit",
@@ -483,8 +487,58 @@ def rank_metadata_urls(question, product, records, embedding_model,
     ]
 
 
+def _is_specific_product_source(item, product):
+    """Reject incidental mentions for branded/variant products.
+
+    Only a page whose URL slug or summary explicitly names the full product
+    can be selected for a specific variant. This is intentionally conservative.
+    """
+    name = normalize_product(product)
+    # Generic services (fund_transfer, fixed_deposit) need broader help pages.
+    tokens = [t for t in name.split() if t not in {"au", "bank", "account", "accounts"}]
+    distinctive = [t for t in tokens if t in {"royale", "ivy", "aarambh", "shakti", "swadesh", "green", "bulk"}]
+    if not distinctive:
+        return True
+    path = normalize_product(urlsplit(item["url"]).path)
+    summary = normalize_product(item.get("summary", ""))
+    # A generic article that merely refers to the branded product in its body
+    # is not a dedicated source; require branding in the URL path or title-like
+    # beginning of the summary.
+    if not all(t in path or t in summary[:140] for t in distinctive):
+        return False
+    if "royale" in distinctive and "business" in tokens:
+        if not ("royale business" in path or "royale business" in summary[:140]):
+            return False
+    return True
+
+
+def _explicitly_named_products(question, available_products):
+    """Find product IDs mentioned in the CURRENT question, not chat history."""
+    q = normalize_product(question)
+    found = _find_products(question, available_products)
+    # Handle a generic service whose canonical ID may not appear as an alias.
+    if re.search(r"\bfund\s+transfers?\b", q):
+        for p in available_products:
+            if canonical_product(p) == "fund_transfer" and p not in found:
+                found.append(p)
+    return list(dict.fromkeys(canonical_product(p) for p in found))
+
+
+def _is_contextual_followup(question, pending_question=None):
+    q = normalize_product(question)
+    if pending_question and len(q.split()) <= 6 and not re.match(
+        r"^(tell me|explain|describe|what is|what are|give me|show me)\b", q
+    ):
+        return True
+    return bool(re.search(r"\b(it|its|those|these|that|their|same|above)\b", q)
+                or re.match(r"^(and|also|what about|how about|tell me more)\b", q))
+
+
 def select_urls_with_llm(question, product, candidates, chat_model,
                          max_urls=3):
+    if not candidates:
+        return []
+    candidates = [c for c in candidates if _is_specific_product_source(c, product)]
     if not candidates:
         return []
 
@@ -578,6 +632,7 @@ def route_question_llm(question, records, conversation_state=None, chat_model=No
         "pending_question": state.get("pending_question"),
         "last_banking_question": state.get("last_banking_question")
     }, ensure_ascii=False)
+    royale_options = sorted({p for p in catalog if "royale" in normalize_product(p)})
     rules = """You classify user queries for an AU Bank product/service chatbot.
 Return ONLY a JSON object, no prose or code fences:
 {"scope":"in_scope|out_of_scope|uncertain","intent":"single|comparison|recommendation|general|clarify", "products":[], "family":null, "explicit_product":false, "clarification":""}
@@ -588,7 +643,10 @@ Return ONLY a JSON object, no prose or code fences:
 - For out_of_scope set intent=general, products=[], and never ask for a product.
 - The product catalog is authoritative. Select only exact IDs from it; never invent IDs.
 - Understand synonyms, plural/singular, misspellings, Hindi, Hinglish, and other Indian languages.
-- Select multiple products for a comparison. Reuse previous products ONLY for genuine follow-ups.
+- Select multiple products ONLY for an explicit comparison in the CURRENT question.
+- For intent=clarify, return products=[] and a brief clarification; NEVER list every candidate ID.
+- Reuse previous products ONLY for genuine follow-ups, never for a standalone new topic.
+- A new query about fund transfer must not inherit a previously discussed account.
 - For product recommendations set intent=recommendation and family to card/account/loan/deposit
   when identifiable, even if no specific product was named.
 - An attribute or audience (e.g. senior citizens, students, women, salaried people)
@@ -614,6 +672,11 @@ Return ONLY a JSON object, no prose or code fences:
 - Clarifications must mention AU Bank products only, using names present in the catalog.
 - Never suggest or mention products of any other bank.
 """
+    rules += ("\nRoyale products present in metadata: " + json.dumps(royale_options)
+              + "\nFor a generic Royale account query, offer all distinct relevant account variants "
+                "from this list, not just Savings and Current. Do not invent variants. "
+                "For clarification replies, preserve the pending original question and its attribute "
+                "(for example DAILY TRANSFER LIMIT), rather than answering how to transfer.")
     data = None
     for attempt in range(2):
         raw = run_chat_model(
@@ -668,6 +731,19 @@ Return ONLY a JSON object, no prose or code fences:
             chosen = options[0] if len(options) == 1 else None
         if chosen and chosen not in selected:
             selected.append(chosen)
+    # Current-turn product mentions take precedence over stale conversation
+    # state and over extra IDs hallucinated by the classifier. Explicit
+    # comparisons retain all explicitly mentioned products.
+    explicit_now = _explicitly_named_products(question, list(catalog))
+    if explicit_now and not _is_contextual_followup(question, state.get("pending_question")):
+        selected = [p for p in selected if canonical_product(p) in explicit_now]
+        if not selected:
+            selected = [p for p in catalog if canonical_product(p) in explicit_now]
+    elif not _is_contextual_followup(question, state.get("pending_question")):
+        # Never reuse an old product on a fresh query with no explicit product.
+        old = {canonical_product(p) for p in state.get("products", [])}
+        selected = [p for p in selected if canonical_product(p) not in old]
+
     # A fresh, generic savings question must not inherit a specific variant.
     # The overview is a verified metadata record and is answered via FAISS.
     if is_generic_savings_question(question) and not state.get("pending_question"):
@@ -677,36 +753,34 @@ Return ONLY a JSON object, no prose or code fences:
                          pending_question=None, last_banking_question=question)
             return {"status": "ready", "intent": "single", "products": ["savings_account"],
                     "product": "savings_account", "question": question, "state": state}
-    # Short product switches inherit the last substantive question, regardless of
-    # whether the classifier unnecessarily requested another clarification.
+    # A short NEW product question is not automatically a follow-up.
+    # Only an outstanding clarification can inherit its original question.
     pending_question = state.get("pending_question")
-    previous_question = pending_question or state.get("last_banking_question")
-    product_only = (bool(selected) and len(question.split()) <= 7
-                    and not is_product_clarification(question))
-    if product_only and previous_question:
-        base_question = re.split(r"\nProduct specified by user:", previous_question, maxsplit=1)[0].strip()
-        resolved_question = base_question + "\nProduct specified by user: " + question
-        state.update(products=selected, product=selected[0] if len(selected) == 1 else None,
-                     pending_question=None, last_banking_question=base_question)
-        return {"status": "ready", "intent": "comparison" if len(selected)>1 else "single",
-                "products": selected, "product": selected[0], "question": resolved_question,
-                "state": state}
+    normalized_question = normalize_product(question)
+    fresh_request = bool(re.match(
+        r"^(tell me|explain|describe|what is|what are|give me|show me|"
+        r"i want to know|information about|details about)\b", normalized_question))
+    product_only = (bool(selected) and len(normalized_question.split()) <= 6
+                    and not is_product_clarification(question) and not fresh_request)
+    # A clarification response should be a short product or option name,
+    # not an independent sentence asking for new information.
+    resolves_pending = bool(pending_question and product_only)
     # Clarification must win over a speculative product ID. The model, not a
     # hardcoded list of products/keywords, decides whether a product was specified.
     if intent == "clarify" and scope == "in_scope":
+        if re.search(r"\broyale\b", normalize_product(question)) and royale_options:
+            labels = ["Savings", "Current", "Salary", "Trade", "World", "Business"]
+            available = {normalize_product(p) for p in royale_options}
+            labels = [label for label in labels if any(label.lower() in name for name in available)]
+            if len(labels) > 1:
+                data["clarification"] = ("Which AU Royale account would you like to know about: "
+                                         + ", ".join(labels)
+                                         + "? Royale Business also has profession-specific variants.")
         message = str(data.get("clarification") or "Which AU Bank product or service do you mean?").strip()
-        state.update(products=[], product=None, pending_question=state.get("pending_question") or question,
-                     last_banking_question=state.get("pending_question") or question)
+        state.update(products=[], product=None, pending_question=question,
+                     last_banking_question=question)
         return {"status":"clarify", "response":message, "state":state}
-    pending_question = state.get("pending_question")
-    # A product-only follow-up can switch products while keeping the question.
-    product_only = bool(selected) and len(normalize_product(question).split()) <= 5 and not is_product_clarification(question)
-    if product_only and not pending_question and state.get("last_banking_question"):
-        pending_question = state["last_banking_question"]
-    # A confirmation of a pending clarification is a request about the
-    # already-identified product, NOT a request for product recommendations.
-    # Keep the original customer request as the retrieval question.
-    if pending_question and selected and len(question.split()) <= 6:
+    if resolves_pending:
         resolved_question = pending_question + "\nProduct specified by user: " + question
     else:
         resolved_question = question
@@ -720,8 +794,7 @@ Return ONLY a JSON object, no prose or code fences:
             return {"status":"recommend", "intent":"recommendation", "family":family,
                     "products":selected, "question":resolved_question, "state":state}
     if selected:
-        if not product_only:
-            state["last_banking_question"] = question
+        state["last_banking_question"] = resolved_question
         state.update(products=selected, product=selected[0] if len(selected)==1 else None,
                      pending_question=None)
         return {"status":"ready", "intent":"comparison" if len(selected)>1 else "single",

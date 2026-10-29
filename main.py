@@ -30,6 +30,7 @@ from metadata_router import (
     select_urls_with_llm,
     is_generic_savings_question,
     savings_overview_urls,
+    normalize_url,
 )
 
 from inference import inference_selected_urls, indexed_source_urls
@@ -687,7 +688,10 @@ def metadata_chat(
         "give the verified AMB with its exact account/branch qualification, "
         "and explicitly say the initial deposit is not specified. "
         "Never imply zero AMB proves zero initial deposit. "
-        "Never invent financial amounts or cite irrelevant pages. ")
+        "Never invent financial amounts or cite irrelevant pages. "
+        "If the user asks for DAILY transfer limits, do not substitute "
+        "a temporary newly-added-beneficiary restriction for the daily limit. "
+        "If the exact daily limit is not supported, state that it cannot be verified. ")
 
     state_key = (domain, conversation_id)
 
@@ -703,7 +707,9 @@ def metadata_chat(
     new_products = route.get("products", [])
     if route["status"] in ("ready", "recommend") and old_products and set(old_products) != set(new_products):
         route["state"] = dict(route["state"])
-        route["state"]["history"] = []
+        # Keep history for the router, but avoid injecting unrelated products
+        # into the evidence-based final answer on a fresh topic.
+        route["state"]["history"] = state.get("history", [])[-12:]
         print("[ROUTER] Products switched:", old_products, "->", new_products)
     print("[ROUTER] Status:",route["status"],"Products:",new_products)
 
@@ -795,8 +801,35 @@ def metadata_chat(
     )
     available_urls = indexed_source_urls(vectorstore.docstore)
 
-    selected_by_product = {}
-    for product in products:
+    # Specific, verified answer pages for a cross-product service question.
+    # The metadata tags these pages under UPI/IMPS/NEFT/NetBanking rather
+    # than a generic fund_transfer product. Normal product-only filtering
+    # would therefore exclude the pages containing the actual limits.
+    daily_limits_request = bool(re.search(
+        r"\b(daily|per\s*day|day)\b", search_question, re.I
+    ) and re.search(
+        r"\b(fund\s*transfers?|money\s*transfers?|transfer\s*limits?)\b",
+        search_question, re.I
+    ) and re.search(r"\blimits?\b", search_question, re.I))
+    daily_limit_sources = [
+        "https://www.au.bank.in/personal-banking/digital-banking/payments/digital-transactions-limit",
+        "https://www.au.bank.in/support/contact-us/retail/payments/fund-transfers/what-are-the-daily-limits-for-online-fund-transfers",
+    ]
+    indexed_daily_sources = [u for u in daily_limit_sources
+                             if normalize_url(u) in {normalize_url(v) for v in available_urls}]
+    if daily_limits_request and indexed_daily_sources:
+        # Use a single source group; never combine with an unrelated
+        # beneficiary setup article or a previous product's context.
+        products = [products[0]] if products else ["fund_transfer"]
+        selected_by_product = {products[0]: indexed_daily_sources}
+        print("[ROUTER] Verified daily-limit source URLs:", indexed_daily_sources)
+        for url in indexed_daily_sources:
+            record = next((r for r in records if normalize_url(r["url"]) == normalize_url(url)), None)
+            if record:
+                print("[URL SUMMARY]", url, "|", record["summary"])
+    else:
+        selected_by_product = {}
+    for product in ([] if daily_limits_request and indexed_daily_sources else products):
         candidates = rank_metadata_urls(
             question=search_question, product=product, records=records,
             embedding_model=embeddings, limit=12, indexed_urls=available_urls
@@ -815,17 +848,22 @@ def metadata_chat(
             if overview:
                 urls = overview[:1] + [u for u in urls if u not in overview][:2]
         if not urls:
-            main_pages = [c for c in candidates if c.get("category") == "main"
-                          and "/blogs/" not in c["url"]]
-            urls = [(main_pages or candidates)[0]["url"]]
+            # A model rejection is NOT permission to cite an irrelevant page.
+            print("[ROUTER] No sufficiently relevant URL selected:", product)
+            continue
         selected_by_product[product] = urls
         print("[ROUTER] Product:", product, "Selected URLs:", urls)
+        summary_by_url = {r["url"]: r["summary"] for r in records}
+        for selected_url in urls:
+            print("[URL SUMMARY]", selected_url, "|", summary_by_url.get(selected_url, "NOT FOUND"))
 
     if len(selected_by_product) != len(products):
         missing = [p for p in products if p not in selected_by_product]
         return "I couldn't find indexed source information for: " + ", ".join(missing)
 
     history = route["state"].get("history", [])
+    if old_products and set(old_products) != set(products) and not state.get("pending_question"):
+        history = []  # new topic: do not contaminate RAG answer with old topic
     if len(products) > 1:
         from inference import inference_multiple_products
         answer = inference_multiple_products(
@@ -934,11 +972,13 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
 
             response = enforce_answer_language(
                 response, detected_lang, prompt, loaded_session.get("selected_chat_model"))
+
             return {
                 "response": clean_customer_text(response),
                 "language": detected_lang,
                 "conversation_id": conversation_id
             }
+        
 
         except Exception as e:
             print("[METADATA CHAT ERROR]", str(e))

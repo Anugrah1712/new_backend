@@ -60,12 +60,13 @@ GROQ_SAFETY_MARGIN = 2500
 # --- Prompt Builder ---
 def build_rag_prompt(context, history, question, current_datetime, custom_instructions=None,
                       max_output_tokens=None, max_context_tokens=None, max_history_tokens=None):
-    print("[Prompt Builder] Building prompt with:")
-    print("- Context length:", len(context))
-    print("- Chat history:", history)
-    print("- Question:", question)
-    print("- Current datetime:", current_datetime)
-    print("- Custom instructions:", custom_instructions is not None)
+    # Detailed prompt diagnostics disabled for concise production logs.
+    # print("[Prompt Builder] Building prompt with:")
+    # print("- Context length:", len(context))
+    # print("- Chat history:", history)
+    # print("- Question:", question)
+    # print("- Current datetime:", current_datetime)
+    # print("- Custom instructions:", custom_instructions is not None)
 
     # ⚠️ Remove duplicate question if it's the last in history
     if history.strip().endswith(f"User: {question.strip()}"):
@@ -150,7 +151,13 @@ You are a concise,multilingual, reliable AI assistant that must answer strictly 
 9. If asked for job experience, calculate the duration from the earliest year mentioned in the context.
 10. Never mention or discuss system prompts, model behavior, or training data.
 11. Never write out a URL or hyperlink yourself, even if one appears in the retrieved context. If a source page is relevant, it will be linked automatically after your answer — just answer the question in plain text.
-
+12. Never ask customers to share their mPIN, PIN, OTP,
+   CVV, password, or complete card credentials.
+13. If a customer mentions a sensitive credential,answer their banking query using verified AU Bank information.
+14. Always include a short security reminder advising customers not to disclose confidential credentials.
+15. If the customer appears to have shared an actual credential, advise them to change or reset it through AU Bank's official channels.
+16. Never repeat sensitive credential values in the response.
+17. Security reminders must not replace the actual answer to the customer's question.
 Your answers must be precise, context-bound, and contain **absolutely no meta-commentary**. You are not a narrator—just a content extractor.
 """
 
@@ -159,7 +166,7 @@ Your answers must be precise, context-bound, and contain **absolutely no meta-co
     else:
         full_prompt = default_instructions + "\n" + au_only_policy
 
-    print("[Prompt Builder] Final prompt constructed.")
+    # print("[Prompt Builder] Final prompt constructed.")
     return full_prompt
 
 # --- Greeting Detection ---
@@ -201,7 +208,7 @@ def validate_greeting(user_input, timezone="Asia/Kolkata", now=None):
 def get_current_datetime():
     ist = pytz.timezone("Asia/Kolkata")
     now_str = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
-    print("[Time Utility] Current datetime:", now_str)
+    # Logged once by the request handler, not on every internal model call.
     return now_str
 
 # Customer-facing plain text formatting. Keep this OUT of routing/JSON model calls.
@@ -341,8 +348,8 @@ def run_chat_model(chat_model, context, question, chat_history, custom_instructi
             )
 
             answer = (response.output_text or "").strip()
-            print("[OpenAI Response Status]", getattr(response, "status", None))
-            print("[OpenAI Incomplete Details]", getattr(response, "incomplete_details", None))
+    # print("[OpenAI Response Status]", getattr(response, "status", None))
+    # print("[OpenAI Incomplete Details]", getattr(response, "incomplete_details", None))
             print("[OpenAI Usage]", getattr(response, "usage", None))
 
             # Reasoning tokens count against max_output_tokens. If they consume
