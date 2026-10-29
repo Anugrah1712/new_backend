@@ -790,6 +790,18 @@ def metadata_chat(
     )
     print("[MULTILINGUAL] Retrieval query:", search_question)
     products = route.get("products") or [route["product"]]
+    # Guard against a generic family replacing an explicitly named product.
+    # Only resolve against actual metadata IDs, never invent a product.
+    if len(products) == 1 and products[0] in {"loan", "account", "deposit", "card"}:
+        from metadata_router import _explicitly_named_products, canonical_product
+        explicit_ids = _explicitly_named_products(prompt, distinct_products(records))
+        specific_ids = [p for p in distinct_products(records)
+                        if canonical_product(p) in explicit_ids and p not in
+                        {"loan", "account", "deposit", "card"}]
+        if len(specific_ids) == 1:
+            print("[ROUTER] Recovered explicit product:", products[0], "->", specific_ids[0])
+            products = specific_ids
+
 
     model_name = loaded_session.get("embedding_model_name", "all-MiniLM-L6-v2")
     faiss_path = os.path.join(faiss_index_dir, "index.faiss")

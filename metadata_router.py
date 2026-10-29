@@ -516,6 +516,23 @@ def _explicitly_named_products(question, available_products):
     """Find product IDs mentioned in the CURRENT question, not chat history."""
     q = normalize_product(question)
     found = _find_products(question, available_products)
+    # Match specific full product names before generic aliases such as "loan".
+    # Example: "processing fee on personal loan" -> au_personal_loan.
+    specific_matches = []
+    for product in available_products:
+        canonical = canonical_product(product)
+        if canonical in {"loan", "account", "deposit", "card"}:
+            continue
+        full_name = normalize_product(product)
+        phrases = [full_name]
+        if full_name.startswith("au "):
+            phrases.append(full_name[3:])
+        if any(len(phrase.split()) >= 2 and _mentioned(q, phrase)
+               for phrase in phrases):
+            specific_matches.append(canonical)
+    if specific_matches:
+        found = specific_matches + [p for p in found
+                                     if canonical_product(p) not in {"loan", "account", "deposit", "card"}]
     # Handle a generic service whose canonical ID may not appear as an alias.
     if re.search(r"\bfund\s+transfers?\b", q):
         for p in available_products:
@@ -731,6 +748,41 @@ Return ONLY a JSON object, no prose or code fences:
             chosen = options[0] if len(options) == 1 else None
         if chosen and chosen not in selected:
             selected.append(chosen)
+    # The model's exact catalog product ID is authoritative. A generic
+    # family such as "loan" must not replace "au_personal_loan".
+    # Also handle a model response that includes both the generic and
+    # specific IDs: keep the specific ID alone for single-product queries.
+    exact_specific = [item for item in raw_products
+                      if isinstance(item, str) and item in catalog
+                      and item not in {"loan", "account", "deposit", "card"}]
+    if exact_specific and intent != "comparison":
+        selected = list(dict.fromkeys(exact_specific))[:1]
+
+    # A generic family label is never a substitute for an explicit, specific
+    # product ID returned by the classifier. In particular, do not turn
+    # au_personal_loan into loan merely because both belong to the loan family.
+    specific = [p for p in selected if p not in {"loan", "account", "deposit", "card"}]
+    if specific:
+        selected = specific
+
+    # If the model names a generic product despite an explicit specific
+    # product in the question, prefer the matching catalog product.
+    explicit_specific = [p for p in _explicitly_named_products(question, list(catalog))
+                         if p not in {"loan", "account", "deposit", "card"}]
+    if explicit_specific and not any(canonical_product(p) in explicit_specific for p in selected):
+        selected = [p for p in catalog if canonical_product(p) in explicit_specific]
+
+    # Cross-product daily transfer limits are answered from indexed AU Bank
+    # transfer-limit pages by main.py; they do not require a method clarification.
+    daily_transfer = bool(re.search(r"\b(daily|per\s*day|day)\b", question, re.I)
+                          and re.search(r"\btransfers?\b", question, re.I)
+                          and re.search(r"\blimits?\b", question, re.I))
+    if daily_transfer:
+        state.update(products=["fund_transfer"], product="fund_transfer",
+                     pending_question=None, last_banking_question=question)
+        return {"status": "ready", "intent": "single", "products": ["fund_transfer"],
+                "product": "fund_transfer", "question": question, "state": state}
+
     # Current-turn product mentions take precedence over stale conversation
     # state and over extra IDs hallucinated by the classifier. Explicit
     # comparisons retain all explicitly mentioned products.
