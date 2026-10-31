@@ -21,6 +21,8 @@ import threading
 import uuid
 import re
 import hmac
+import time
+from functools import lru_cache
 
 from metadata_router import (
     load_metadata,
@@ -463,6 +465,52 @@ def _load_metadata_index(index_dir, model_name, faiss_mtime, pickle_mtime):
     return embeddings, vectorstore
 
 
+
+# Dedicated authoritative sources. The uploaded PDF is bundled alongside the backend.
+AU_LEA_PDF_URL = "https://www.au.bank.in/pdf/contact-us/point-of-contacts-for-law-enforcement-and-intelligence-agencie.pdf"
+AU_LEA_COMPLAINT_URL = "https://www.au.bank.in/support/contact-us/raise-complaint"
+AU_ABOUT_URL = "https://www.au.bank.in/about-us"
+
+def _is_lea_query(question):
+    q = str(question).lower()
+    return bool(re.search(r"\b(lea|leas|law enforcement|intelligence agenc(?:y|ies)|ncrp|cyber police|police notice|police requisition)\b", q))
+
+def _is_branch_count_query(question):
+    q = str(question).lower()
+    return bool(re.search(r"\b(branch|branches)\b", q) and
+                re.search(r"\b(how many|number|total|count|network)\b", q))
+
+@lru_cache(maxsize=1)
+def _lea_pdf_text():
+    path = os.path.join(BASE_DIR, "lea_source.txt")
+    if not os.path.isfile(path):
+        raise FileNotFoundError("Bundled LEA PDF extraction missing: " + path)
+    with open(path, "r", encoding="utf-8") as handle:
+        return handle.read()
+
+def _source_grounded_special_answer(question, loaded_session, response_language, faiss_index_dir):
+    from inference import run_chat_model, append_web_sources
+    if _is_lea_query(question):
+        evidence = _lea_pdf_text()
+        if not evidence.strip():
+            return "The AU Bank law-enforcement contact document could not be read."
+        instructions = ("Answer ONLY from the official AU Bank law-enforcement contact PDF. "
+                        "Give only the requested names, email addresses, phone numbers or escalation contacts. "
+                        "Do not invent any details or discuss unrelated services. "
+                        + answer_language_instruction(response_language, question))
+        result = run_chat_model(loaded_session.get("selected_chat_model"), evidence[:12500],
+                                question, [], custom_instructions=instructions,
+                                max_output_tokens=1100, temperature=0)
+        return append_web_sources(clean_customer_text(result), [AU_LEA_COMPLAINT_URL], question=question)
+    if _is_branch_count_query(question):
+        # About Us was checked in the supplied DOCX. Its dynamic counters
+        # appear as literal zero, NOT an actual branch count.
+        return ("The scraped AU Bank About Us page does not provide a verifiable "
+                "numeric branch count: its dynamic counters were captured as 0. "
+                "Please check the official About Us page for the latest figure.\n\n"
+                "Related search results:\n" + AU_ABOUT_URL)
+    return None
+
 def strip_social_links(reply):
     """Defense in depth: social replies must never expose citations or URLs."""
     if not isinstance(reply, str):
@@ -679,6 +727,7 @@ def metadata_chat(
     response_language="en",
     original_question=None
 ):
+    route_started = time.perf_counter()
     records = load_metadata(metadata_path)
     answer_instructions = (loaded_session.get("custom_prompt") or "") + "\n" + answer_language_instruction(response_language, original_question or prompt)
     answer_instructions += ("\nAU BANK EVIDENCE RULE: Answer only about AU Bank. "
@@ -712,6 +761,7 @@ def metadata_chat(
         route["state"]["history"] = state.get("history", [])[-12:]
         print("[ROUTER] Products switched:", old_products, "->", new_products)
     print("[ROUTER] Status:",route["status"],"Products:",new_products)
+    print(f"[PERFORMANCE] Metadata routing: {time.perf_counter()-route_started:.2f}s")
 
     with conversation_lock:
         conversation_states[state_key] = route["state"]
@@ -785,9 +835,8 @@ def metadata_chat(
     # A product-only switch must keep the user's substantive question for
     # retrieval, while the response remains in the language of the current turn.
     # Keep original wording for response language; use English only for searching.
-    search_question = retrieval_query_in_english(
-        resolved_question, loaded_session.get("selected_chat_model")
-    )
+    search_question = (resolved_question if response_language == "en" else
+        retrieval_query_in_english(resolved_question, loaded_session.get("selected_chat_model")))
     print("[MULTILINGUAL] Retrieval query:", search_question)
     products = route.get("products") or [route["product"]]
     # Guard against a generic family replacing an explicitly named product.
@@ -849,16 +898,17 @@ def metadata_chat(
         if not candidates:
             print("[ROUTER] No indexed candidates:", product)
             continue
-        urls = select_urls_with_llm(
-            question=search_question, product=product, candidates=candidates,
-            chat_model=loaded_session.get("selected_chat_model")
-        )
+        # Keep the question-aware ranking. Do not re-sort by category: a
+        # documentation FAQ/blog can be more relevant than a generic main page.
+        # Include up to 3 indexed sources for complementary evidence, without
+        # introducing another LLM call or permitting unindexed URLs.
+        urls = list(dict.fromkeys(c["url"] for c in candidates[:10]))
         # Prefer the verified AU Savings Account overview for generic requests.
         # Do not allow a blog fallback to obscure an indexed official overview.
         if is_generic_savings_question(search_question) and product == "savings_account":
             overview = savings_overview_urls(records, available_urls)
             if overview:
-                urls = overview[:1] + [u for u in urls if u not in overview][:2]
+                urls = overview[:1] + [u for u in urls if u not in overview][:9]
         if not urls:
             # A model rejection is NOT permission to cite an irrelevant page.
             print("[ROUTER] No sufficiently relevant URL selected:", product)
@@ -944,10 +994,26 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print(f"❌ [CHAT] ➤ Failed to load session state: {e}")
         raise HTTPException(status_code=500, detail="❌ Failed to load session state.")
 
+    # Specialized factual routes avoid the 3-5 serial LLM calls of generic RAG.
+    if os.path.isfile(os.path.join(domain_folder, "metadata.json")) and (
+            _is_lea_query(prompt) or _is_branch_count_query(prompt)):
+        t0 = time.perf_counter()
+        special = _source_grounded_special_answer(prompt, loaded_session, detected_lang,
+                    os.path.join(domain_folder, "faiss_index"))
+        print(f"[PERFORMANCE] Special-source answer: {time.perf_counter()-t0:.2f}s")
+        return {"response": clean_customer_text(special), "language": detected_lang,
+                "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+
     # Social conversation is handled by the selected LLM, before RAG.
     # This intentionally does not depend on a hardcoded greeting list.
     # Only short messages need this extra classification call.
-    if len(prompt.split()) <= 18:
+    if len(prompt.split()) <= 18 and not re.search(
+            r"\b(bank|fd|fixed deposit|loan|account|branch|deposit|transfer|rate|interest|card|lea|police|ncrp|complaint|balance|kyc|atm)\b",
+            prompt, re.I):
+        greeting = validate_greeting(prompt)
+        if greeting:
+            return {"response": greeting, "language": detected_lang,
+                    "conversation_id": payload.conversation_id or str(uuid.uuid4())}
         social_reply = conversational_social_reply(
             prompt, loaded_session.get("selected_chat_model"), detected_lang)
         if social_reply is not None:

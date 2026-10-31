@@ -6937,7 +6937,9 @@
   {
     "url": "https://www.au.bank.in/support/contact-us/raise-complaint",
     "category": "main",
-    "product": [],
+    "product": [
+      "law_enforcement_agency_contact"
+    ],
     "summary": "AU Small Finance Bank’s complaint and contact page explains how to submit a complaint or feedback, contact support, and escalate an unresolved issue through four grievance levels, including the RBI Ombudsman. It includes complaint-form fields, customer-care channels and wait times, business-head and nodal-officer contact information, and addresses for written complaints. It can answer questions about complaint submission routes, escalation steps, and listed support contacts."
   },
   {
@@ -8166,7 +8168,7 @@
     "url": "https://www.au.bank.in/about-us",
     "category": "main",
     "product": [],
-    "summary": "About AU Small Finance Bank: founder and CEO Sanjay Agarwal’s background and leadership, AU’s history from a vehicle finance company founded in 1996 to a bank in 2017, its stated vision and mission, organizational milestones, and awards. The page says AU received in-principle RBI approval to transition into a universal bank and gives high-level customer, employee, and service-area figures. It can answer questions about AU’s origins, leadership, stated purpose, recognition, and broad institutional profile."
+    "summary": "About AU Small Finance Bank: founder and CEO Sanjay Agarwal’s background and leadership, AU’s history from a vehicle finance company founded in 1996 to a bank in 2017, its stated vision and mission, organizational milestones, and awards. The page says AU received in-principle RBI approval to transition into a universal bank and gives high-level customer, employee, and service-area figures. It can answer questions about AU’s origins, leadership, stated purpose, recognition, and broad institutional profile. IMPORTANT: The scraped About Us page contains a dynamically rendered numeric counter represented as 0 in the export. This is NOT a verified branch count. Do not claim 0 branches or confuse touchpoints with branches."
   },
   {
     "url": "https://www.au.bank.in/about-us/board-committee",
@@ -26167,5 +26169,13 @@
       "working_capital_loan"
     ],
     "summary": "Educational guide to venture capital in India, covering fund structure, investment and exit processes, funding stages, SEBI regulations, startup tax benefits, fundraising preparation, term sheets, risks, and common myths. It answers questions about how VC works, how much equity investors may take, fundraising timelines, taxation, and whether VC suits a small business. It also briefly describes AU Bank startup banking services, including current accounts, working capital and MSME financing, escrow, and forex. The article is informational, not a detailed product terms page."
+  },
+  {
+    "url": "https://www.au.bank.in/pdf/contact-us/point-of-contacts-for-law-enforcement-and-intelligence-agencie.pdf",
+    "category": "main",
+    "product": [
+      "law_enforcement_agency_contact"
+    ],
+    "summary": "Official AU Small Finance Bank point-of-contact list for law enforcement and intelligence agencies: dedicated email, primary SPOCs, NCRP contacts, central SPOC and escalation matrix. Source is an uploaded PDF."
   }
 ]

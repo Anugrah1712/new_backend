@@ -551,3 +551,8 @@ async def preprocess_vectordbs(
 
     # ❌ Unsupported DB case
     raise ValueError(f"[ERROR] Unsupported vector DB selected: {selected_vectordb}")
+
+# LEA PDF ships with the backend and is read directly by main.py for LEA
+# questions. This avoids rebuilding the large FAISS index just for one PDF.
+# If a full rebuild is done later, include this PDF in doc_files and keep
+# AU_LEA_PDF_URL in the corresponding metadata record.

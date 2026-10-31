@@ -416,6 +416,48 @@ def recommendation_candidates(question, family, records, indexed_urls=None, limi
     return [item for _,item in results[:limit]]
 
 
+def _question_evidence_terms(question):
+    """Extract the information requested, separately from the product name.
+
+    These are topic/intent synonyms, not product-specific URL overrides.
+    """
+    q = normalize_product(question)
+    groups = (
+        (r"\b(documents?|documentation|paperwork|papers|kyc|proofs?|upload)\b",
+         ("document", "documentation", "kyc", "proof", "paperwork", "salary slip", "bank statement", "identity", "income proof")),
+        (r"\b(eligib(?:le|ility)|qualif(?:y|ication)|criteria)\b",
+         ("eligibility", "eligible", "criteria", "qualification", "requirements")),
+        (r"\b(processing fee|fees?|charges?|penalt(?:y|ies)|costs?)\b",
+         ("fee", "charge", "processing", "penalty", "cost")),
+        (r"\b(interest|rates?|roi|yield)\b",
+         ("interest", "rate", "yield", "roi")),
+        (r"\b(tenure|duration|months?|years?|term|maturity)\b",
+         ("tenure", "duration", "maturity", "months", "years")),
+        (r"\b(opening deposit|initial deposit|minimum balance|average monthly balance)\b",
+         ("opening deposit", "initial deposit", "minimum balance", "average monthly balance")),
+    )
+    terms = set()
+    for pattern, words in groups:
+        if re.search(pattern, q):
+            terms.update(words)
+    return terms
+
+
+def _evidence_relevance(question, item):
+    """Question-specific evidence coverage; generic application steps are not documentation."""
+    terms = _question_evidence_terms(question)
+    if not terms:
+        return 0.0
+    path = normalize_product(urlsplit(item["url"]).path)
+    summary = normalize_product(item.get("summary", ""))
+    # Evidence must be on-topic in the metadata, not merely in the product tag.
+    hits = sum(1 for term in terms if _mentioned(summary, term))
+    path_hits = sum(1 for term in terms if _mentioned(path, term))
+    if not hits and not path_hits:
+        return -0.24
+    return min(0.70, 0.15 + 0.085 * hits + 0.09 * path_hits)
+
+
 def rank_metadata_urls(question, product, records, embedding_model,
                        limit=12, indexed_urls=None):
     available = (
@@ -478,6 +520,11 @@ def rank_metadata_urls(question, product, records, embedding_model,
             scores[i] -= 0.08
         if "interest" in query.lower() and "interest-rate" in path:
             scores[i] += 0.10
+
+    # Specific evidence coverage outranks a generic product/apply page.
+    # Main pages remain preferred only when they actually cover the intent.
+    for i, item in enumerate(candidates):
+        scores[i] += _evidence_relevance(question, item)
 
     positions = np.argsort(-scores)[:limit]
 
@@ -630,12 +677,36 @@ Rules:
 
 # Metadata-driven LLM routing. No fixed product alias/category table is used
 # for deciding intent, scope, or product. The selected chat model makes the decision.
+
+# Fixed-deposit amount routing: apply BEFORE LLM classification and after it.
+# INR 3 crore = 30,000,000; do not confuse with 3 lakh.
+def bulk_fd_amount(question):
+    q = str(question or '').lower().replace(',', '').replace('₹', ' ').replace('inr', ' ')
+    if not re.search(r"\b(fd|fds|fixed\s+deposits?|term\s+deposits?)\b", q):
+        return False
+    amounts = []
+    for m in re.finditer(r"(?<![\w.])(\d+(?:\.\d+)?)\s*(crores?|crs?)(?!\w)", q):
+        amounts.append(float(m.group(1)) * 10000000)
+    for m in re.finditer(r"(?<![\w.])(\d+(?:\.\d+)?)\s*(lakhs?|lacs?|lacs)(?!\w)", q):
+        amounts.append(float(m.group(1)) * 100000)
+    for m in re.finditer(r"(?<![\w.])(\d{7,})(?![\w.])", q):
+        amounts.append(float(m.group(1)))
+    return any(amount >= 30000000 for amount in amounts)
+
 def route_question_llm(question, records, conversation_state=None, chat_model=None):
     from inference import run_chat_model
     state = dict(conversation_state or {})
     if not chat_model:
         raise ValueError("A selected chat model is required for metadata routing")
 
+    # Deterministic threshold beats LLM inference for financial product routing.
+    if bulk_fd_amount(question):
+        ids = {p for r in records for p in r.get("product", [])}
+        if "bulk_fixed_deposit" in ids:
+            state.update(products=["bulk_fixed_deposit"], product="bulk_fixed_deposit",
+                         pending_question=None, last_banking_question=question)
+            return {"status":"ready", "intent":"single", "products":["bulk_fixed_deposit"],
+                    "product":"bulk_fixed_deposit", "question":question, "state":state}
     # Keep classification small: product identifiers are sufficient for routing.
     # URL summaries are used later during URL ranking, not in this classifier.
     catalog = {str(product).strip(): [] for record in records
@@ -673,6 +744,9 @@ Return ONLY a JSON object, no prose or code fences:
 - Do NOT infer a savings account, FD, loan, or other product solely because one
   catalog product contains that audience term. The presence of a catalog match
   does not establish the user's intended product.
+- FD amount routing: INR 3 crore or more (3 cr, 3 crore, 30000000, 3.5 crore)
+  MUST select bulk_fixed_deposit if present. Below INR 3 crore use normal
+  fixed_deposit unless the user explicitly requests another variant.
 - A generic Savings Account request is not an explicit Regular Savings Account request.
 - Set explicit_product=true ONLY if the user actually identifies a product or
   clearly refers to an already established product in a genuine follow-up.
