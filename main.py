@@ -717,6 +717,276 @@ def answer_language_instruction(language_code, original_question):
     )
 
 
+@lru_cache(maxsize=8)
+def _load_metadata_cached(path, mtime_ns, size):
+    """Reuse parsed metadata until the file changes on disk."""
+    return load_metadata(path)
+
+
+
+
+def _fd_question_intent(question):
+    q = str(question or "").lower()
+    is_fd = bool(re.search(r"\b(fd|fixed[ -]?deposits?|term[ -]?deposits?)\b", q))
+    return {
+        "fd": is_fd,
+        "calculator": is_fd and bool(re.search(r"\b(calculat(?:e|or|ion)|estimate|maturity amount|returns?)\b", q)),
+        "manage": bool(re.search(r"\b(manage|update|modify|change|close|renew|download|certificate|existing|track|status|premature|withdraw)\b", q)),
+        "apply": bool(re.search(r"\b(open|book|apply|start|create|invest|new fd)\b", q)),
+        "eligibility": bool(re.search(r"\b(eligib|qualif|who can)\b", q)),
+        "documents": bool(re.search(r"\b(documents?|paperwork|kyc|proof)\b", q)),
+        "green": bool(re.search(r"\bgreen[ -]?(?:fd|fixed[ -]?deposit)\b", q)),
+        "bulk": bool(re.search(r"\bbulk[ -]?(?:fd|fixed[ -]?deposit)\b", q)),
+        "variants": bool(re.search(r"\b(types?|variants?|compare|comparison|versus|vs)\b", q)),
+    }
+
+
+def _intent_profile(question):
+    q = str(question or "").lower()
+    return {
+        "calculator": bool(re.search(r"\b(?:calculator|calculate|calculation)\b", q)),
+        "documents": bool(re.search(r"\b(?:documents?|documentation|paperwork|kyc|proofs?|salary slip)\b", q)),
+        "eligibility": bool(re.search(r"\b(?:eligib\w*|qualif\w*|who can)\b", q)),
+        "activation": bool(re.search(r"\b(?:enable|activat\w*|register|registration|set\s*up|first.time)\b", q)),
+        "opening": bool(re.search(r"\b(?:open|opening|apply|application|book|start)\b", q)),
+        "servicing": bool(re.search(r"\b(?:manage|update|modify|close|renew|download|certificate|existing|track|status|premature|withdraw)\b", q)),
+        "rates": bool(re.search(r"\b(?:rates?|interest|yield)\b", q)),
+        "specialized": bool(re.search(r"\b(?:self.employed|freelanc\w*|without\s+(?:a\s+)?salary|nri|nre|green fd|bulk fd)\b", q)),
+    }
+
+
+def _page_relevance(question, record, product):
+    """Conservative intent-aware score; does not treat incidental keyword mentions as evidence."""
+    from urllib.parse import urlsplit
+    q = str(question or "").lower()
+    intent = _intent_profile(q)
+    path = urlsplit(record["url"]).path.lower()
+    summary = record.get("summary", "").lower()
+    category = str(record.get("category", "")).lower()
+    p = str(product or "").lower()
+    score = 0.0
+    if category == "main": score += 18
+    if "/blogs/" in path: score -= 25
+    if "/exclusive-news" in path: score -= 90
+    if "/support/" in path: score -= 4
+    if path in ("/loans", "/personal-banking/loans", "/interest-rate", "/interest-rates"):
+        score -= 35
+    if "crowdfunding" in path or "commercial-and-small-finance" in path: score -= 75
+    if intent["documents"]:
+        if re.search(r"document|kyc|salary.slip|paperwork|proof", path): score += 35
+        if re.search(r"document|kyc|proof", summary): score += 10
+        if "personal-loan" in path and "/blogs/" not in path: score += 48
+        if not intent["specialized"] and re.search(r"without.salary|self.employed|freelanc", path): score -= 95
+    if intent["eligibility"]:
+        if re.search(r"eligib|qualif|criteria|requirement", path): score += 65
+        if re.search(r"eligib|qualif|criteria", summary): score += 12
+    if intent["activation"]:
+        if re.search(r"activat|enable|registr|first.time|set.up|login|netbanking", path): score += 45
+        if re.search(r"activat|enable|registr|set up", summary): score += 16
+        if "digital-transactions-limit" in path: score -= 85
+        if "/blogs/" in path: score -= 45
+    if intent["opening"]:
+        if re.search(r"open|apply|application|book", path): score += 50
+        if re.search(r"open|apply|application|video kyc", summary): score += 12
+        if "savings-account" in path and "/support/" not in path: score += 50
+    if intent["calculator"]:
+        if "calculator" in path: score += 110
+        else: score -= 18
+    if intent["rates"] and "interest-rate" in path: score += 38
+    if not intent["servicing"] and re.search(r"interest.certificate|download|view.or.update|update.your.pan|error", path): score -= 75
+    if not intent["specialized"] and re.search(r"nri.or.nre|nr.customer|green.fd|bulk.fd", path): score -= 65
+    if "msme" in p:
+        if re.search(r"msme|micro.small|small.business|business.loan|secured.business", path): score += 35
+        if not re.search(r"msme|business.loan|secured.business|small.enterprise|micro.enterprise", path + " " + summary): score -= 65
+    if "netbanking" in p or "net_banking" in p:
+        if re.search(r"netbanking|net.banking|internet.banking", path): score += 55
+        if not re.search(r"netbanking|net banking|internet banking", path + " " + summary): score -= 60
+    return score
+
+
+def _select_intent_sources(question, product, records, available_urls, candidates, limit=4):
+    """Use indexed, product-matching pages; refuse irrelevant fallbacks."""
+    from metadata_router import canonical_product
+    from urllib.parse import urlsplit
+    available = {normalize_url(u) for u in available_urls}
+    target = canonical_product(product)
+    aliases = {target}
+    if target == "msme_loan":
+        aliases.add("msme_business_loan")
+    if target in {"netbanking", "au_net_banking", "net_banking", "au_0101_netbanking"}:
+        # Metadata uses au_net_banking; LLM/canonicalizer may return netbanking.
+        # Match both catalog identifiers without changing the routed product.
+        aliases.update({"netbanking", "au_net_banking", "net_banking", "au_0101_netbanking"})
+    pool = [r for r in records if normalize_url(r["url"]) in available
+            and any(canonical_product(p) in aliases for p in r.get("product", []))]
+    base = {normalize_url(r["url"]): float(r.get("score", 0)) for r in candidates}
+    # Include pages beyond top-12 semantic candidates, but do not invent any source.
+    ranked = sorted(pool, key=lambda r: (_page_relevance(question, r, product)
+                     + min(15, base.get(normalize_url(r["url"]), 0)*12)), reverse=True)
+    intent = _intent_profile(question)
+    if intent["activation"] and "netbanking" in str(product).lower():
+        ranked = [r for r in ranked if (
+                      re.search(r"netbanking|net.banking|internet.banking|registration|activation", r["url"], re.I)
+                      or re.search(r"(?:enable|activate|register|registration|set up).{0,75}(?:netbanking|net banking|internet banking)", r["summary"], re.I))
+                  and not re.search(r"/blogs/|digital-transactions-limit", r["url"], re.I)]
+    if intent["eligibility"] and "msme" in str(product).lower():
+        ranked = [r for r in ranked if re.search(r"msme|business.loan|secured.business|small.enterprise|micro.enterprise", r["url"] + " " + r["summary"], re.I)
+                  and not re.search(r"/blogs/(?:what-is-crowdfunding|difference-between-commercial)|exclusive-news", r["url"], re.I)]
+        ranked.sort(key=lambda r: (int("msme-business-loan-documents-and-eligibility" in r["url"]),
+                                   _page_relevance(question, r, product)), reverse=True)
+    if intent["documents"] and "personal_loan" in str(product):
+        # Documentation questions require pages about DOCUMENTS, not how to
+        # click Apply in an app. Keep the primary product page and indexed
+        # document/KYC-specific resources; don't pad with generic pages.
+        def document_evidence_page(r):
+            url = r["url"].lower()
+            summary = r.get("summary", "").lower()
+            if re.search(r"/savings-account/|company-secretaries|/apply-now/|/au-0101-app|/business/loans/apply-for-loan/", url):
+                return False
+            if re.search(r"without.salary|self.employed|freelanc", url) and not intent["specialized"]:
+                return False
+            if url.rstrip("/").endswith("/personal-banking/personal-loan"):
+                return True
+            # Strong product + documentation signals must coexist.
+            is_personal = bool(re.search(r"personal[-_ ]loan", url + " " + summary))
+            is_docs = bool(re.search(r"document|documentation|kyc|proof|salary.slip|bank.statement|paperwork", url + " " + summary))
+            return is_personal and is_docs
+        ranked = [r for r in ranked if document_evidence_page(r)]
+        ranked.sort(key=lambda r: (
+            int(bool(re.search(r"personal.loan.{0,55}(?:documents?|documentation|kyc)|(?:documents?|documentation|kyc).{0,55}personal.loan", r["url"].lower()))),
+            int(r["url"].lower().rstrip("/").endswith("/personal-banking/personal-loan")),
+            _page_relevance(question, r, product)
+        ), reverse=True)
+    if intent["documents"] and "personal_loan" in str(product):
+        ranked = [r for r in ranked if not re.search(r"/savings-account/|company-secretaries|/au-0101-app|/apply-for-personal-loan-on-au-0101", r["url"], re.I)]
+        ranked.sort(key=lambda r: (int(r["url"].endswith("/personal-banking/personal-loan")),
+                                   _page_relevance(question, r, product)), reverse=True)
+    if intent["opening"] and "savings_account" in str(product):
+        ranked = [r for r in ranked if not re.search(r"/blogs/(?:open-2-savings|open-child-first|open-minor|open-kids)", r["url"], re.I)]
+    if intent["documents"] and not intent["specialized"] and "personal_loan" in str(product):
+        ranked = [r for r in ranked if not re.search(r"without.salary|self.employed|freelanc", r["url"], re.I)]
+    result, seen = [], set()
+    for r in ranked:
+        path = urlsplit(r["url"]).path.lower().rstrip("/")
+        key = "interest-rate-directory" if path in ("/interest-rate", "/interest-rates") else path
+        if key in seen: continue
+        seen.add(key)
+        result.append(r["url"])
+        if len(result) >= limit: break
+    return result
+
+
+def _related_metadata_urls(question, products, ranked_by_product,
+                           selected_by_product, indexed_urls, records, max_related=5):
+    """Only show intent-relevant indexed resources; fewer than five is fine."""
+    from metadata_router import canonical_product
+    from urllib.parse import urlsplit
+    available = {normalize_url(u) for u in indexed_urls}
+    product_ids = {canonical_product(p) for p in products}
+    if "msme_loan" in product_ids: product_ids.add("msme_business_loan")
+    if product_ids.intersection({"au_net_banking", "netbanking", "net_banking", "au_0101_netbanking"}): product_ids.update({"au_net_banking", "netbanking", "net_banking", "au_0101_netbanking"})
+    candidates = [r for r in records if normalize_url(r["url"]) in available
+                  and any(canonical_product(p) in product_ids for p in r.get("product", []))]
+    if product_ids.intersection({"au_net_banking", "netbanking", "net_banking", "au_0101_netbanking"}):
+        # Metadata tags may differ from the router's chosen canonical name.
+        # Restrict the fallback to verified indexed NetBanking paths.
+        existing = {normalize_url(r["url"]) for r in candidates}
+        for r in records:
+            url = normalize_url(r["url"])
+            path = urlsplit(url).path.lower()
+            if (url in available and url not in existing and
+                    ("netbanking" in path or "net-banking" in path)):
+                candidates.append(r)
+                existing.add(url)
+    base = {normalize_url(c["url"]): c.get("score", 0)
+            for ranked in ranked_by_product.values() for c in ranked}
+    ranked = sorted(candidates, key=lambda r: max(_page_relevance(question, r, p) for p in products)
+                    + min(15, base.get(normalize_url(r["url"]), 0)*12), reverse=True)
+    result, seen = [], set()
+    intent = _intent_profile(question)
+    for r in ranked:
+        path = urlsplit(r["url"]).path.lower().rstrip("/")
+        key = "interest-rate-directory" if path in ("/interest-rate", "/interest-rates") else path
+        score = max(_page_relevance(question, r, p) for p in products)
+        if score < 0 or key in seen: continue
+        if intent["opening"] and "savings_account" in product_ids and re.search(r"/blogs/(?:open-2-savings|open-child-first|open-minor|open-kids)", path): continue
+        if intent["documents"] and "au_personal_loan" in product_ids:
+            if re.search(r"/savings-account/|company-secretaries|/au-0101-app|/apply-now/|/business/loans/apply-for-loan/", path): continue
+            if not (path == "/personal-banking/personal-loan" or (
+                re.search(r"personal.loan", path) and re.search(r"document|documentation|kyc|proof|salary.slip", path + " " + r.get("summary", "").lower())
+            )): continue
+        if not intent["servicing"] and re.search(r"interest.certificate|download|view.or.update|update.your.pan|error", path): continue
+        if not intent["specialized"] and re.search(r"nri.or.nre|nr.customer|green.fd|bulk.fd", path): continue
+        if intent["activation"] and re.search(r"/blogs/|digital-transactions-limit", path): continue
+        if intent["eligibility"] and "msme" in " ".join(products).lower() and re.search(r"/blogs/(?:what-is-crowdfunding|difference-between-commercial)|exclusive-news", path): continue
+        seen.add(key); result.append(r["url"])
+        if len(result) >= max_related: break
+    return result
+
+
+def _contextual_ctas(question, related_urls, max_ctas=2):
+    """Action buttons must target the exact official product/service page.
+
+    Never turn an informational blog or cross-sold account into an application CTA.
+    """
+    from urllib.parse import urlsplit
+    intent = _intent_profile(question)
+    q = str(question or "").lower()
+    is_savings = bool(re.search(r"\bsavings?\s+accounts?\b", q))
+    is_personal_loan = bool(re.search(r"\bpersonal\s+loans?\b", q))
+    is_fd = bool(re.search(r"\b(?:fd|fixed\s+deposits?)\b", q))
+    is_netbanking = bool(re.search(r"\b(?:net\s*banking|internet\s+banking)\b", q))
+    actions = []
+    for url in related_urls:
+        parts = urlsplit(url)
+        if parts.scheme != "https" or parts.hostname not in ("au.bank.in", "www.au.bank.in"):
+            continue
+        path = parts.path.lower().rstrip("/")
+        if "/blogs/" in path or "/support/" in path:
+            continue
+        entry = None
+        if is_savings and intent["opening"] and path == "/personal-banking/savings-account":
+            entry = (100, "Explore Savings Accounts", "explore_savings_accounts")
+        elif is_personal_loan and path == "/personal-banking/personal-loan":
+            if intent["documents"]:
+                entry = (100, "View Personal Loan Details", "view_personal_loan")
+            elif intent["opening"]:
+                entry = (90, "Explore Personal Loan", "explore_personal_loan")
+        elif is_fd and path.endswith("/fd-calculator"):
+            # Rate queries should offer the calculator as a useful next step too.
+            entry = (100 if intent["calculator"] else 85,
+                     "Calculate FD Returns", "calculate_fd_returns")
+        elif is_fd and path == "/interest-rates/fixed-deposit-interest-rates":
+            entry = (95 if not intent["calculator"] else 70,
+                     "View FD Interest Rates", "view_fd_interest_rates")
+        elif is_netbanking and intent["activation"] and path in (
+            "/personal-banking/digital-banking/au-0101/au-0101-netbanking",
+            "/personal-banking/digital-banking/online-banking/au-mobile/steps-to-register-au-mobile",
+        ):
+            entry = (90, "Set Up NetBanking", "setup_netbanking")
+        if entry:
+            priority, label, action = entry
+            actions.append((priority, {"label": label, "action": action, "url": url}))
+    result, used = [], set()
+    for _, item in sorted(actions, key=lambda x: -x[0]):
+        if item["action"] not in used:
+            used.add(item["action"])
+            result.append(item)
+        if len(result) >= max_ctas: break
+    return result
+
+
+def _replace_related_results(answer, urls):
+    """Keep one clean sidebar section; never alter the generated answer body."""
+    if not isinstance(answer, str):
+        return answer
+    body = re.split(r"(?im)^\s*Related search results\s*:\s*$", answer, maxsplit=1)[0].rstrip()
+    if not urls or not body or body.lower().startswith((
+        "an error occurred", "this service is temporarily unavailable",
+        "i couldn't find relevant source content")):
+        return body
+    return body + "\n\nRelated search results:\n" + "\n".join(urls)
+
 def metadata_chat(
     prompt,
     domain,
@@ -728,7 +998,10 @@ def metadata_chat(
     original_question=None
 ):
     route_started = time.perf_counter()
-    records = load_metadata(metadata_path)
+    metadata_stat = os.stat(metadata_path)
+    records = _load_metadata_cached(
+        metadata_path, metadata_stat.st_mtime_ns, metadata_stat.st_size
+    )
     answer_instructions = (loaded_session.get("custom_prompt") or "") + "\n" + answer_language_instruction(response_language, original_question or prompt)
     answer_instructions += ("\nAU BANK EVIDENCE RULE: Answer only about AU Bank. "
         "For account-opening questions, distinguish an initial opening deposit "
@@ -741,6 +1014,41 @@ def metadata_chat(
         "If the user asks for DAILY transfer limits, do not substitute "
         "a temporary newly-added-beneficiary restriction for the daily limit. "
         "If the exact daily limit is not supported, state that it cannot be verified. ")
+
+    # Payout mode is determined by the current user request, not by the
+    # presence of other rate tables in the retrieved article.
+    fd_rate_request = bool(re.search(
+        r"\b(fd|fds|fixed\s+deposits?|term\s+deposits?)\b", prompt, re.I
+    ) and re.search(r"\b(interest|rates?|yield|returns?)\b", prompt, re.I))
+    monthly_requested = bool(re.search(
+        r"\b(monthly|every\s+month|month[-\s]?wise)\b", prompt, re.I
+    ))
+    quarterly_requested = bool(re.search(
+        r"\b(quarterly|every\s+quarter)\b", prompt, re.I
+    ))
+    compare_payouts = bool(re.search(
+        r"\b(compare|comparison|difference|versus|vs\.?|both|all\s+payouts?)\b",
+        prompt, re.I
+    ))
+    default_fd_payout = (fd_rate_request and not (
+        monthly_requested or quarterly_requested or compare_payouts
+    ))
+    if default_fd_payout:
+        answer_instructions += ("\nMANDATORY REGULAR FD RATE TABLE POLICY: "
+            "The user has not requested monthly or quarterly payout rates. "
+            "Use the standard/regular FD interest-rate table, with interest payable "
+            "at maturity, as the default. For senior-citizen questions use the "
+            "eligible senior-citizen column of that regular table. "
+            "Do not display monthly-payout or quarterly-payout columns or "
+            "their figures, and do not mix different payout tables. "
+            "Do not substitute annualized yield for the quoted interest rate. "
+            "Preserve verified tenures, rates, eligibility, and effective dates; "
+            "if the requested table cannot be verified, say so rather than inventing it.")
+    elif fd_rate_request and (monthly_requested or quarterly_requested):
+        answer_instructions += ("\nFD PAYOUT TABLE POLICY: The user explicitly "
+            "requested a payout frequency. Use that frequency's verified FD rate "
+            "table. Do not substitute regular maturity rates for it unless the "
+            "user explicitly asks for a comparison. ")
 
     state_key = (domain, conversation_id)
 
@@ -838,7 +1146,12 @@ def metadata_chat(
     search_question = (resolved_question if response_language == "en" else
         retrieval_query_in_english(resolved_question, loaded_session.get("selected_chat_model")))
     print("[MULTILINGUAL] Retrieval query:", search_question)
-    products = route.get("products") or [route["product"]]
+    from metadata_router import deduplicate_product_aliases
+    products = deduplicate_product_aliases(
+        route.get("products") or [route["product"]], distinct_products(records)
+    )
+    if len(products) != len(route.get("products") or [route["product"]]):
+        print("[ROUTER] Deduplicated product aliases:", products)
     # Guard against a generic family replacing an explicitly named product.
     # Only resolve against actual metadata IDs, never invent a product.
     if len(products) == 1 and products[0] in {"loan", "account", "deposit", "card"}:
@@ -890,25 +1203,60 @@ def metadata_chat(
                 print("[URL SUMMARY]", url, "|", record["summary"])
     else:
         selected_by_product = {}
+    related_candidates_by_product = {}
     for product in ([] if daily_limits_request and indexed_daily_sources else products):
         candidates = rank_metadata_urls(
             question=search_question, product=product, records=records,
             embedding_model=embeddings, limit=12, indexed_urls=available_urls
         )
         if not candidates:
-            print("[ROUTER] No indexed candidates:", product)
-            continue
+            # Metadata semantic ranking can miss aliases even when indexed
+            # catalog records exist. Let the intent selector inspect those records.
+            print("[ROUTER] No semantic candidates; checking indexed product aliases:", product)
+        related_candidates_by_product[product] = candidates
         # Keep the question-aware ranking. Do not re-sort by category: a
         # documentation FAQ/blog can be more relevant than a generic main page.
         # Include up to 3 indexed sources for complementary evidence, without
         # introducing another LLM call or permitting unindexed URLs.
-        urls = list(dict.fromkeys(c["url"] for c in candidates[:10]))
+        urls = _select_intent_sources(search_question, product, records, available_urls, candidates, limit=4)
+        print("[INTENT RANKING]", product, urls)
+        # Calculator instructions need the calculator page, not unrelated FD variants.
+        fd_intent = _fd_question_intent(search_question)
+        if fd_intent["calculator"] and product == "fixed_deposit":
+            calculator_url = next((
+                r["url"] for r in records
+                if "fd-calculator" in normalize_url(r["url"]).lower()
+                and normalize_url(r["url"]) in available_urls
+            ), None)
+            if calculator_url:
+                urls = [calculator_url]
+                print("[FD CALCULATOR] Primary calculator source selected:", calculator_url)
+        # For ordinary FD rate questions, prioritize the indexed primary
+        # retail FD rate sheet; exclude Green/Bulk FD and generic landing pages
+        # from answer evidence unless the user explicitly asks for a variant.
+        if default_fd_payout and product == "fixed_deposit":
+            primary_path = "/interest-rates/fixed-deposit-interest-rates"
+            primary = next((
+                r["url"] for r in records
+                if normalize_url(r["url"]).lower().endswith(primary_path)
+                and normalize_url(r["url"]) in available_urls
+            ), None)
+            if primary:
+                urls = [primary]
+                print("[FD POLICY] Primary regular FD rate sheet selected:", primary)
+            else:
+                # No invented URL or unsupported primary source.
+                urls = [u for u in urls if not re.search(
+                    r"green[-_/]?fd|green[-_/]?fixed|bulk[-_/]?fd|bulk[-_/]?fixed",
+                    u, re.I
+                )]
+                print("[FD POLICY] Primary FD rate sheet not indexed; using ranked non-variant evidence")
         # Prefer the verified AU Savings Account overview for generic requests.
         # Do not allow a blog fallback to obscure an indexed official overview.
         if is_generic_savings_question(search_question) and product == "savings_account":
             overview = savings_overview_urls(records, available_urls)
             if overview:
-                urls = overview[:1] + [u for u in urls if u not in overview][:9]
+                urls = overview[:1] + [u for u in urls if u not in overview][:2]
         if not urls:
             # A model rejection is NOT permission to cite an irrelevant page.
             print("[ROUTER] No sufficiently relevant URL selected:", product)
@@ -953,6 +1301,23 @@ def metadata_chat(
             top_k=loaded_session.get("top_k", 8),
             temperature=loaded_session.get("temperature", 0.3)
         )
+
+    # Issue 4: related discovery is independent of answer evidence. These
+    # URLs are NOT passed to inference_selected_urls / the answer model.
+    # Use the already ranked metadata candidates: no extra embedding/LLM call.
+    related_urls = _related_metadata_urls(
+        search_question, products, related_candidates_by_product,
+        selected_by_product, available_urls, records, max_related=5
+    )
+    if "savings_account" in products and _intent_profile(search_question)["opening"]:
+        overview = savings_overview_urls(records, available_urls)
+        related_urls = list(dict.fromkeys(overview[:1] + related_urls))[:5]
+    if "au_personal_loan" in products:
+        primary = "https://www.au.bank.in/personal-banking/personal-loan"
+        if normalize_url(primary) in {normalize_url(u) for u in available_urls}:
+            related_urls = list(dict.fromkeys([primary] + related_urls))[:5]
+    answer = _replace_related_results(answer, related_urls)
+    print("[RELATED PAGES]", related_urls)
 
     with conversation_lock:
         latest = conversation_states.get(state_key, {})
@@ -1008,7 +1373,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     # This intentionally does not depend on a hardcoded greeting list.
     # Only short messages need this extra classification call.
     if len(prompt.split()) <= 18 and not re.search(
-            r"\b(bank|fd|fixed deposit|loan|account|branch|deposit|transfer|rate|interest|card|lea|police|ncrp|complaint|balance|kyc|atm)\b",
+            r"\b(bank|fd|fixed deposit|loan|account|branch|deposit|transfer|rate|interest|card|lea|police|ncrp|complaint|balance|kyc|atm|m[ -]?pin|pin|password|otp|reset|forgot|forgotten|upi|imps|neft|rtgs|netbanking)\b",
             prompt, re.I):
         greeting = validate_greeting(prompt)
         if greeting:
@@ -1051,10 +1416,18 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             response = enforce_answer_language(
                 response, detected_lang, prompt, loaded_session.get("selected_chat_model"))
 
+            # CTAs are separate from the response text, and are grounded in
+            # the same verified Related Pages URLs the UI already displays.
+            related_section = re.split(r"(?im)^\s*Related search results\s*:\s*$", response, maxsplit=1)
+            related_urls = (re.findall(r"https?://[^\s<>]+", related_section[1])
+                            if len(related_section) > 1 else [])
+            ctas = _contextual_ctas(prompt, related_urls)
+            print("[CONTEXTUAL CTAS]", ctas)
             return {
                 "response": clean_customer_text(response),
                 "language": detected_lang,
-                "conversation_id": conversation_id
+                "conversation_id": conversation_id,
+                "ctas": ctas
             }
         
 

@@ -655,12 +655,28 @@ def _document_source_urls(doc):
     }
 
 
+# A loaded FAISS docstore is immutable during normal chat requests.
+# Keep only a few entries to avoid unbounded process memory growth.
+from collections import OrderedDict
+_INDEXED_URL_CACHE = OrderedDict()
+_INDEXED_URL_CACHE_MAX = 4
+
+
 def indexed_source_urls(docstore):
-    """Return the exact set of source URLs with indexed evidence."""
+    """Return indexed URLs without rescanning every chunk on each request."""
+    key = id(docstore)
+    entry = _INDEXED_URL_CACHE.get(key)
+    if entry is not None and entry[0] is docstore:
+        _INDEXED_URL_CACHE.move_to_end(key)
+        return entry[1]
     urls = set()
     for doc in docstore._dict.values():
         urls.update(_document_source_urls(doc))
-    return urls
+    frozen = frozenset(urls)
+    _INDEXED_URL_CACHE[key] = (docstore, frozen)
+    if len(_INDEXED_URL_CACHE) > _INDEXED_URL_CACHE_MAX:
+        _INDEXED_URL_CACHE.popitem(last=False)
+    return frozen
 
 
 # Cache TF-IDF document matrices per FAISS/docstore instance and selected URL set.

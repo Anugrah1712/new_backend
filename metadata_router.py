@@ -1,16 +1,13 @@
-
 # metadata_router.py
-
 import json
+import hashlib
+from collections import OrderedDict
 import re
 from functools import lru_cache
 from urllib.parse import urlsplit, urlunsplit
-
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-
-
 def normalize_url(url):
     p = urlsplit(str(url).strip())
     return urlunsplit((
@@ -20,19 +17,17 @@ def normalize_url(url):
         "",
         ""
     ))
-
-
 def normalize_product(text):
     return re.sub(
         r"[^a-z0-9]+", " ",
         str(text).lower().replace("_", " ").replace("-", " ")
     ).strip()
-
-
 # One canonical identifier for each product across routing, state and metadata.
 PRODUCT_CANONICAL_MAP = {
     "fd": "fixed_deposit", "fds": "fixed_deposit",
     "fixed_deposits": "fixed_deposit",
+    "senior_citizen_fixed_deposit": "fixed_deposit",
+    "senior_citizen_fixed_deposits": "fixed_deposit",
     "term_deposit": "fixed_deposit", "term_deposits": "fixed_deposit",
     "au_savings_account": "savings_account",
     "personal_loan": "au_personal_loan",
@@ -43,12 +38,27 @@ PRODUCT_CANONICAL_MAP = {
     "bulk_fd": "bulk_fixed_deposit",
     "bulk_fixed_deposits": "bulk_fixed_deposit",
 }
-
-
 def canonical_product(product):
     key = normalize_product(product).replace(" ", "_")
     return PRODUCT_CANONICAL_MAP.get(key, key)
+def deduplicate_product_aliases(products, available_products=None):
+    """Collapse synonymous catalog IDs without merging distinct FD variants.
 
+    Return a real metadata ID for each canonical product. Prefer the primary
+    canonical ID if indexed in the metadata, otherwise keep the first alias.
+    """
+    available = set(available_products or [])
+    grouped = {}
+    for product in products or []:
+        if not isinstance(product, str) or not product.strip():
+            continue
+        canonical = canonical_product(product)
+        current = grouped.get(canonical)
+        if current is None or (product == canonical and current != canonical and
+                               (not available or product in available)):
+            grouped[canonical] = product
+    return [canonical if canonical in available else chosen
+            for canonical, chosen in grouped.items()]
 
 def is_generic_savings_question(question):
     """Only generic savings queries; never override an explicitly named variant."""
@@ -59,36 +69,26 @@ def is_generic_savings_question(question):
                 "value", "ivy", "royale", "kids", "kisan", "shakti", "swadesh",
                 "senior citizen", "platinum", "abhi", "institution", "women")
     return not any(re.search(r"(?<!\w)" + re.escape(x) + r"(?!\w)", q) for x in specific)
-
-
 def savings_overview_urls(records, indexed_urls=None):
     """Grounded in metadata, not a fabricated account variant."""
     available = {normalize_url(u) for u in indexed_urls} if indexed_urls is not None else None
     return [r["url"] for r in records
             if urlsplit(r["url"]).path.rstrip("/").lower() == "/personal-banking/savings-account"
             and (available is None or normalize_url(r["url"]) in available)]
-
-
 def load_metadata(path):
     with open(path, "r", encoding="utf-8") as f:
         records = json.load(f)
-
     if not isinstance(records, list) or not records:
         raise ValueError("Metadata must be a non-empty JSON array.")
-
     result = []
     seen = set()
-
     for i, item in enumerate(records, 1):
         if not isinstance(item, dict):
             raise ValueError(f"Invalid record {i}")
-
         if not all(k in item for k in ("url", "category", "product", "summary")):
             raise ValueError(f"Missing metadata fields in record {i}")
-
         url = normalize_url(item["url"])
         products = item["product"]
-
         if (
             not url.startswith(("https://", "http://"))
             or not isinstance(products, list)
@@ -96,10 +96,8 @@ def load_metadata(path):
             or not isinstance(item["summary"], str)
         ):
             raise ValueError(f"Invalid metadata fields in record {i}")
-
         if url in seen:
             raise ValueError(f"Duplicate metadata URL: {url}")
-
         seen.add(url)
         result.append({
             "url": url,
@@ -107,22 +105,16 @@ def load_metadata(path):
             "product": list(dict.fromkeys(products)),
             "summary": item["summary"].strip()
         })
-
     return result
-
-
 def distinct_products(records):
     return sorted({
         product
         for item in records
         for product in item["product"]
     })
-
-
 def _aliases(product):
     name = normalize_product(product)
     aliases = {name}
-
     # Generic abbreviations, never additional product identifiers.
     if name == "fixed deposit":
         aliases.update(("fd", "fds", "fixed deposits", "term deposit"))
@@ -130,7 +122,6 @@ def _aliases(product):
         aliases.update(("savings", "saving account", "savings accounts"))
     if name == "current account":
         aliases.add("current accounts")
-
     # Allow shortened multiword product names only when the abbreviation
     # identifies a single metadata product (checked by resolve_product).
     tokens = name.split()
@@ -139,15 +130,11 @@ def _aliases(product):
         if short and short not in {"personal", "business", "home", "car", "credit", "savings", "current"}:
             aliases.add(short)
     return aliases
-
-
 def _mentioned(text, phrase):
     return bool(re.search(
         r"(?<!\w)" + re.escape(phrase) + r"(?!\w)",
         text
     ))
-
-
 def resolve_product(question, products):
     """Prefer exact canonical product names over shortened aliases."""
     query = normalize_product(question)
@@ -157,8 +144,8 @@ def resolve_product(question, products):
         for alias in _aliases(product):
             if alias and _mentioned(query, alias):
                 # Canonical names outrank aliases at equal phrase length.
-                # This avoids `fixed_deposit_account`'s shortened alias
-                # `fixed deposit` competing with actual `fixed_deposit`.
+                # This avoids \`fixed_deposit_account\`'s shortened alias
+                # \`fixed deposit\` competing with actual \`fixed_deposit\`.
                 matches.append((len(alias.split()), len(alias),
                                 int(alias == canonical), product))
     if not matches:
@@ -168,8 +155,6 @@ def resolve_product(question, products):
     if len(winners) != 1:
         return None, "ambiguous"
     return next(iter(winners)), "matched"
-
-
 def _product_family(product):
     """Classify supported metadata products without requiring a fixed product list."""
     name = normalize_product(product)
@@ -182,8 +167,6 @@ def _product_family(product):
     if re.search(r"\b(cards?)\b", name):
         return "card"
     return None
-
-
 def _requested_family(question):
     q = normalize_product(question)
     if re.search(r"\b(loans?|borrowing)\b", q):
@@ -195,12 +178,8 @@ def _requested_family(question):
     if re.search(r"\b(cards?)\b", q):
         return "card"
     return None
-
-
 def _display_product(product):
     return normalize_product(product).title().replace("Msme", "MSME").replace("Sme", "SME").replace("Nri", "NRI")
-
-
 def _family_examples(products):
     # Prioritize commonly requested names, but only when actually present.
     preferred = ("personal loan", "home loan", "business loan", "msme loan", "car loan", "two wheeler loan",
@@ -208,13 +187,9 @@ def _family_examples(products):
     return ", ".join(_display_product(p) for p in sorted(products, key=lambda p: (
         next((i for i, phrase in enumerate(preferred) if normalize_product(p) == phrase), len(preferred)),
         normalize_product(p)))[:6])
-
-
 def _clarify(question, state, message):
     state["pending_question"] = question
     return {"status": "clarify", "response": message, "state": state}
-
-
 def _looks_like_followup(question):
     q = normalize_product(question)
     # Explicit references and short questions about the current product.
@@ -229,8 +204,6 @@ def _looks_like_followup(question):
     ):
         return True
     return False
-
-
 def is_product_clarification(question):
     q = normalize_product(question)
     return bool(re.search(
@@ -239,15 +212,12 @@ def is_product_clarification(question):
         r"limit|limits|open|opening|close|closing|requirements?|"
         r"minimum|maximum|how|what|can|could|want|need)\b", q
     ))
-
-
 # Only verified/approved aliases should be added here. The spelling "Royal-E"
 # is treated as AU Royale Savings Account for this deployment; verify with the bank.
 PRODUCT_ALIASES = {
     "royal e account": "au_royale_savings_account",
     "royal e": "au_royale_savings_account",
     # Royale without an account type is ambiguous: never force savings.
-
     "ivy account": "au_ivy_savings_account",
     "au ivy account": "au_ivy_savings_account",
     "bulk fd": "bulk_fixed_deposit",
@@ -258,14 +228,11 @@ PRODUCT_ALIASES = {
     "fixed deposits": "fixed_deposit",
     "term deposits": "fixed_deposit",
 }
-
-
 def _find_products(question, products):
     """Detect one or more products, treating canonical aliases as one product."""
     q = normalize_product(question)
     available = set(canonical_product(p) for p in products)
     found, spans = [], []
-
     def add_matches(alias, target):
         alias = normalize_product(alias)
         target = canonical_product(target)
@@ -276,15 +243,12 @@ def _find_products(question, products):
             if not any(b < old_e and e > old_b for old_b, old_e in spans):
                 spans.append((b, e))
                 found.append(target)
-
     # Longer aliases must take precedence (e.g. Green FD over FD).
     for alias, target in sorted(PRODUCT_ALIASES.items(),
                                 key=lambda kv: -len(normalize_product(kv[0]))):
         add_matches(alias, target)
-
     for product in sorted(products, key=lambda p: -len(normalize_product(p))):
         add_matches(product, product)
-
     # Short forms only when they have one unique canonical owner.
     alias_owners = {}
     for product in products:
@@ -295,13 +259,9 @@ def _find_products(question, products):
         if len(alias) >= 3 and len(owners) == 1:
             add_matches(alias, next(iter(owners)))
     return list(dict.fromkeys(found))
-
-
 def _recommendation_intent(question):
     q = normalize_product(question)
     return bool(re.search(r"\b(best|recommend|suggest|suitable|which|looking for|need|want|zero balance|lifetime free|no annual fee)\b", q))
-
-
 def _recommendation_family(question):
     q = normalize_product(question)
     if re.search(r"\b(credit card|credit cards|cards?)\b", q):
@@ -309,8 +269,6 @@ def _recommendation_family(question):
     if re.search(r"\b(savings account|zero balance|student account)\b", q):
         return "account"
     return None
-
-
 def route_question(question, records, conversation_state=None):
     state = dict(conversation_state or {})
     products = distinct_products(records)
@@ -325,7 +283,6 @@ def route_question(question, records, conversation_state=None):
     rec_family = _recommendation_family(question)
     print("[ROUTER DEBUG] Detected:", detected, "Previous:", previous, "Pending:", pending,
           "Recommendation:", recommendation, "Family:", rec_family)
-
     # Generic product labels should not block discovery, nor be treated as
     # a second product when the user asks for a recommendation.
     generic = {"loan", "account", "deposit", "card", "credit_card", "savings_account"}
@@ -333,7 +290,6 @@ def route_question(question, records, conversation_state=None):
         state.update(product=None, products=[], pending_question=None)
         return {"status": "recommend", "intent": "recommendation", "family": rec_family,
                 "products": [], "question": question, "state": state}
-
     if detected:
         # A clarification reply must not replace the actual pending question.
         short_reply = len(q.split()) <= 5 and not re.search(
@@ -344,20 +300,17 @@ def route_question(question, records, conversation_state=None):
         return {"status": "ready", "product": detected[0], "products": detected,
                 "intent": "comparison" if len(detected)>1 else "single",
                 "question": resolved, "state": state}
-
     # A short alias clarification, including FD, retains the ORIGINAL question.
     if pending and q in {"fd", "fds", "fixed deposit", "fixed deposits"} and "fixed_deposit" in products:
         state.update(product="fixed_deposit", products=["fixed_deposit"], pending_question=None)
         return {"status":"ready", "product":"fixed_deposit", "products":["fixed_deposit"],
                 "intent":"single", "question":pending + "\nProduct: fixed_deposit", "state":state}
-
     # If a user is continuing a known product conversation, keep it.
     # Never turn an interest-rate follow-up into a new clarification.
     if previous and len(previous)==1 and not pending and not family and _looks_like_followup(question):
         state.update(product=previous[0], products=previous)
         return {"status":"ready", "product":previous[0], "products":previous,
                 "intent":"single", "question":question, "state":state}
-
     # Generic family question: clarify only when no relevant product context.
     if family:
         options=[p for p in products if _product_family(p)==family and normalize_product(p) not in
@@ -368,7 +321,6 @@ def route_question(question, records, conversation_state=None):
                     "intent":"single", "question":question, "state":state}
         state.update(product=None, products=[], pending_question=pending or question)
         return {"status":"clarify", "response":f"Which type of {family} are you interested in? For example: {_family_examples(options)}.", "state":state}
-
     # A new substantive question supersedes an unresolved clarification.
     if pending and (len(q.split())>5 or re.search(r"\b(what|how|why|compare|difference|differ)\b",q)):
         pending=None;state["pending_question"]=None
@@ -383,8 +335,6 @@ def route_question(question, records, conversation_state=None):
         state.update(product=None,products=[],pending_question=question)
         return {"status":"clarify","response":"Which product are you referring to?","state":state}
     return {"status":"unsupported","response":"Sorry, I don't have information about that product in the available knowledge base.","state":state}
-
-
 def recommendation_candidates(question, family, records, indexed_urls=None, limit=24):
     """Discover real indexed product pages, not just broad explainer blogs."""
     available = {normalize_url(u) for u in indexed_urls} if indexed_urls is not None else None
@@ -414,11 +364,8 @@ def recommendation_candidates(question, family, records, indexed_urls=None, limi
         if score>0:results.append((score,item))
     results.sort(key=lambda x:(-x[0],x[1]['url']))
     return [item for _,item in results[:limit]]
-
-
 def _question_evidence_terms(question):
     """Extract the information requested, separately from the product name.
-
     These are topic/intent synonyms, not product-specific URL overrides.
     """
     q = normalize_product(question)
@@ -435,14 +382,14 @@ def _question_evidence_terms(question):
          ("tenure", "duration", "maturity", "months", "years")),
         (r"\b(opening deposit|initial deposit|minimum balance|average monthly balance)\b",
          ("opening deposit", "initial deposit", "minimum balance", "average monthly balance")),
+        (r"\b(reset|forgot|forgotten|recover|recovery|unlock)\b",
+         ("reset", "forgot", "forgotten", "recover", "recovery", "unlock")),
     )
     terms = set()
     for pattern, words in groups:
         if re.search(pattern, q):
             terms.update(words)
     return terms
-
-
 def _evidence_relevance(question, item):
     """Question-specific evidence coverage; generic application steps are not documentation."""
     terms = _question_evidence_terms(question)
@@ -455,7 +402,32 @@ def _evidence_relevance(question, item):
     path_hits = sum(1 for term in terms if _mentioned(path, term))
     if not hits and not path_hits:
         return -0.24
-    return min(0.70, 0.15 + 0.085 * hits + 0.09 * path_hits)
+    score = 0.15 + 0.085 * hits + 0.09 * path_hits
+    # A URL dedicated to the requested procedure is stronger evidence than
+    # a broad support landing page mentioning the same action.
+    if path_hits:
+        score += 0.20
+    return min(0.90, score)
+# Reuse metadata page embeddings across requests for the same product/model.
+# The cache key incorporates page text, so metadata changes invalidate entries.
+_METADATA_VECTOR_CACHE = OrderedDict()
+_METADATA_VECTOR_CACHE_LIMIT = 12
+
+
+def _cached_metadata_vectors(texts, embedding_model):
+    fingerprint = hashlib.sha256(
+        json.dumps(texts, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    key = (id(embedding_model), fingerprint)
+    vectors = _METADATA_VECTOR_CACHE.get(key)
+    if vectors is not None:
+        _METADATA_VECTOR_CACHE.move_to_end(key)
+        return vectors
+    vectors = np.asarray(embedding_model.embed_documents(texts), dtype=np.float32)
+    _METADATA_VECTOR_CACHE[key] = vectors
+    if len(_METADATA_VECTOR_CACHE) > _METADATA_VECTOR_CACHE_LIMIT:
+        _METADATA_VECTOR_CACHE.popitem(last=False)
+    return vectors
 
 
 def rank_metadata_urls(question, product, records, embedding_model,
@@ -470,10 +442,8 @@ def rank_metadata_urls(question, product, records, embedding_model,
                for p in item["product"])
         and (available is None or normalize_url(item["url"]) in available)
     ]
-
     if not candidates:
         return []
-
     texts = [
         " ".join((
             item["url"].replace("-", " ").replace("/", " "),
@@ -483,9 +453,7 @@ def rank_metadata_urls(question, product, records, embedding_model,
         ))
         for item in candidates
     ]
-
     query = question + " " + normalize_product(product)
-
     corpus = [query] + texts
     tfidf = TfidfVectorizer(
         stop_words="english",
@@ -496,18 +464,13 @@ def rank_metadata_urls(question, product, records, embedding_model,
     lexical = cosine_similarity(
         lexical_matrix[0:1], lexical_matrix[1:]
     ).ravel()
-
     # Use the same embedding model as the content FAISS index.
     q_vec = np.asarray(
         embedding_model.embed_query(query), dtype=np.float32
     ).reshape(1, -1)
-    doc_vecs = np.asarray(
-        embedding_model.embed_documents(texts), dtype=np.float32
-    )
-
+    doc_vecs = _cached_metadata_vectors(texts, embedding_model)
     semantic = cosine_similarity(q_vec, doc_vecs).ravel()
     scores = 0.45 * lexical + 0.55 * semantic
-
     # Stronger preference for authoritative product pages when the question
     # asks for an exact opening amount, eligibility requirement, or rate.
     exact_requirement = bool(re.search(r"opening|open\b|deposit|minimum|balance|require|eligib", query, re.I))
@@ -520,23 +483,17 @@ def rank_metadata_urls(question, product, records, embedding_model,
             scores[i] -= 0.08
         if "interest" in query.lower() and "interest-rate" in path:
             scores[i] += 0.10
-
     # Specific evidence coverage outranks a generic product/apply page.
     # Main pages remain preferred only when they actually cover the intent.
     for i, item in enumerate(candidates):
         scores[i] += _evidence_relevance(question, item)
-
     positions = np.argsort(-scores)[:limit]
-
     return [
         {**candidates[int(i)], "score": float(scores[int(i)])}
         for i in positions
     ]
-
-
 def _is_specific_product_source(item, product):
     """Reject incidental mentions for branded/variant products.
-
     Only a page whose URL slug or summary explicitly names the full product
     can be selected for a specific variant. This is intentionally conservative.
     """
@@ -557,8 +514,6 @@ def _is_specific_product_source(item, product):
         if not ("royale business" in path or "royale business" in summary[:140]):
             return False
     return True
-
-
 def _explicitly_named_products(question, available_products):
     """Find product IDs mentioned in the CURRENT question, not chat history."""
     q = normalize_product(question)
@@ -586,8 +541,6 @@ def _explicitly_named_products(question, available_products):
             if canonical_product(p) == "fund_transfer" and p not in found:
                 found.append(p)
     return list(dict.fromkeys(canonical_product(p) for p in found))
-
-
 def _is_contextual_followup(question, pending_question=None):
     q = normalize_product(question)
     if pending_question and len(q.split()) <= 6 and not re.match(
@@ -596,8 +549,6 @@ def _is_contextual_followup(question, pending_question=None):
         return True
     return bool(re.search(r"\b(it|its|those|these|that|their|same|above)\b", q)
                 or re.match(r"^(and|also|what about|how about|tell me more)\b", q))
-
-
 def select_urls_with_llm(question, product, candidates, chat_model,
                          max_urls=3):
     if not candidates:
@@ -605,10 +556,8 @@ def select_urls_with_llm(question, product, candidates, chat_model,
     candidates = [c for c in candidates if _is_specific_product_source(c, product)]
     if not candidates:
         return []
-
     # Reuse the existing model handler; validate its output strictly.
     from inference import run_chat_model
-
     shortlist = [
         {
             "id": i,
@@ -618,16 +567,13 @@ def select_urls_with_llm(question, product, candidates, chat_model,
         }
         for i, c in enumerate(candidates)
     ]
-
     instruction = """
 Select the best AU Bank source URLs for answering the user question.
 Only select AU Bank product/service pages relevant to the question.
 Prefer primary AU Bank product pages and official terms over generic blog articles when both are relevant.
 Never select a page whose principal subject is another bank.
-
 Return ONLY JSON:
 {"ids": [0, 1]}
-
 Rules:
 - Select up to 3 candidate IDs.
 - Use only IDs in the supplied list.
@@ -639,7 +585,6 @@ Rules:
 - Do not invent URLs, facts, products, or IDs.
 - If no candidate is relevant, return {"ids": []}.
 """
-
     context = json.dumps(shortlist, ensure_ascii=False)
     response = run_chat_model(
         chat_model=chat_model,
@@ -650,17 +595,13 @@ Rules:
         max_output_tokens=400,
         temperature=0
     )
-
     allowed = {i: c["url"] for i, c in enumerate(candidates)}
-
     try:
         match = re.search(r"\{[\s\S]*\}", response)
         payload = json.loads(match.group(0)) if match else {}
         ids = payload.get("ids", [])
-
         if not isinstance(ids, list):
             ids = []
-
         selected = []
         for i in ids:
             if type(i) is int and i in allowed:
@@ -669,15 +610,11 @@ Rules:
                     selected.append(url)
             if len(selected) >= max_urls:
                 break
-
         return selected
     except (ValueError, TypeError, AttributeError):
         return []
-
-
 # Metadata-driven LLM routing. No fixed product alias/category table is used
 # for deciding intent, scope, or product. The selected chat model makes the decision.
-
 # Fixed-deposit amount routing: apply BEFORE LLM classification and after it.
 # INR 3 crore = 30,000,000; do not confuse with 3 lakh.
 def bulk_fd_amount(question):
@@ -692,13 +629,11 @@ def bulk_fd_amount(question):
     for m in re.finditer(r"(?<![\w.])(\d{7,})(?![\w.])", q):
         amounts.append(float(m.group(1)))
     return any(amount >= 30000000 for amount in amounts)
-
 def route_question_llm(question, records, conversation_state=None, chat_model=None):
     from inference import run_chat_model
     state = dict(conversation_state or {})
     if not chat_model:
         raise ValueError("A selected chat model is required for metadata routing")
-
     # Deterministic threshold beats LLM inference for financial product routing.
     if bulk_fd_amount(question):
         ids = {p for r in records for p in r.get("product", [])}
@@ -831,21 +766,18 @@ Return ONLY a JSON object, no prose or code fences:
                       and item not in {"loan", "account", "deposit", "card"}]
     if exact_specific and intent != "comparison":
         selected = list(dict.fromkeys(exact_specific))[:1]
-
     # A generic family label is never a substitute for an explicit, specific
     # product ID returned by the classifier. In particular, do not turn
     # au_personal_loan into loan merely because both belong to the loan family.
     specific = [p for p in selected if p not in {"loan", "account", "deposit", "card"}]
     if specific:
         selected = specific
-
     # If the model names a generic product despite an explicit specific
     # product in the question, prefer the matching catalog product.
     explicit_specific = [p for p in _explicitly_named_products(question, list(catalog))
                          if p not in {"loan", "account", "deposit", "card"}]
     if explicit_specific and not any(canonical_product(p) in explicit_specific for p in selected):
         selected = [p for p in catalog if canonical_product(p) in explicit_specific]
-
     # Cross-product daily transfer limits are answered from indexed AU Bank
     # transfer-limit pages by main.py; they do not require a method clarification.
     daily_transfer = bool(re.search(r"\b(daily|per\s*day|day)\b", question, re.I)
@@ -856,7 +788,6 @@ Return ONLY a JSON object, no prose or code fences:
                      pending_question=None, last_banking_question=question)
         return {"status": "ready", "intent": "single", "products": ["fund_transfer"],
                 "product": "fund_transfer", "question": question, "state": state}
-
     # Current-turn product mentions take precedence over stale conversation
     # state and over extra IDs hallucinated by the classifier. Explicit
     # comparisons retain all explicitly mentioned products.
@@ -869,7 +800,10 @@ Return ONLY a JSON object, no prose or code fences:
         # Never reuse an old product on a fresh query with no explicit product.
         old = {canonical_product(p) for p in state.get("products", [])}
         selected = [p for p in selected if canonical_product(p) not in old]
-
+    # Synonymous metadata IDs (fixed_deposit, term_deposit, plurals) must
+    # never trigger multiple retrievals for a single underlying product.
+    # Preserve genuinely distinct products for explicit comparisons.
+    selected = deduplicate_product_aliases(selected, catalog)
     # A fresh, generic savings question must not inherit a specific variant.
     # The overview is a verified metadata record and is answered via FAISS.
     if is_generic_savings_question(question) and not state.get("pending_question"):
