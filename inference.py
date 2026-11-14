@@ -1,6 +1,14 @@
 # inference.py
 import os
+
+# Verbose model/token/evidence prints are disabled; timings live in main.py.
+def print(*args, **kwargs):
+    return None
+
 import google.generativeai as genai
+import time as _perf_time
+from contextvars import ContextVar as _ContextVar
+_aura_stage_timings = _ContextVar("aura_stage_timings", default=None)
 from openai import OpenAI
 import pytz
 import numpy as np
@@ -797,6 +805,7 @@ def inference_selected_urls(
     index_to_docstore_id=None,
     retrieval_question=None
 ):
+    _stage_clock = _perf_time.perf_counter()
     docs = _filtered_url_documents(
         question=retrieval_question or question,
         embedding_model=embedding_model,
@@ -807,6 +816,9 @@ def inference_selected_urls(
         index_to_docstore_id=index_to_docstore_id
     )
 
+    _stage_data = _aura_stage_timings.get()
+    if _stage_data is not None:
+        _stage_data["retrieval"] = _stage_data.get("retrieval", 0.0) + (_perf_time.perf_counter() - _stage_clock)
     if not docs:
         return (
             "I couldn't find relevant source content "
@@ -859,6 +871,7 @@ SOURCE RESTRICTIONS:
         if msg.get("role") == "user"
     ]
 
+    _stage_clock = _perf_time.perf_counter()
     answer = run_chat_model(
         chat_model=chat_model,
         context=context,
@@ -871,6 +884,8 @@ SOURCE RESTRICTIONS:
         temperature=temperature
     )
 
+    if _stage_data is not None:
+        _stage_data["answer_llm"] = _stage_data.get("answer_llm", 0.0) + (_perf_time.perf_counter() - _stage_clock)
     return append_web_sources(
         answer,
         evidence_urls,

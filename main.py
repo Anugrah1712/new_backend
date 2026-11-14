@@ -1,10 +1,23 @@
 # main.py
 from pathlib import Path
+import builtins as _console
+import logging as _logging
+import contextvars as _contextvars
+
+# Suppress verbose legacy diagnostic prints; request summaries use _console.print.
+def print(*args, **kwargs):
+    return None
+
 from metadata_router import load_metadata, distinct_products
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException,Request, Header
 from typing import List, Optional
 from preprocess import preprocess_vectordbs
-from inference import inference, clean_customer_text, validate_greeting
+from inference import (
+    inference,
+    clean_customer_text,
+    validate_greeting,
+    _aura_stage_timings,
+)
 from webscrape import scrape_web_data
 import uvicorn
 import os, json, validators, pickle
@@ -998,6 +1011,7 @@ def metadata_chat(
     original_question=None
 ):
     route_started = time.perf_counter()
+    _stage_data = _aura_stage_timings.get()
     metadata_stat = os.stat(metadata_path)
     records = _load_metadata_cached(
         metadata_path, metadata_stat.st_mtime_ns, metadata_stat.st_size
@@ -1069,7 +1083,9 @@ def metadata_chat(
         route["state"]["history"] = state.get("history", [])[-12:]
         print("[ROUTER] Products switched:", old_products, "->", new_products)
     print("[ROUTER] Status:",route["status"],"Products:",new_products)
-    print(f"[PERFORMANCE] Metadata routing: {time.perf_counter()-route_started:.2f}s")
+    if _stage_data is not None:
+        _stage_data["routing"] = time.perf_counter() - route_started
+    _stage_clock = time.perf_counter()
 
     with conversation_lock:
         conversation_states[state_key] = route["state"]
@@ -1271,6 +1287,8 @@ def metadata_chat(
         missing = [p for p in products if p not in selected_by_product]
         return "I couldn't find indexed source information for: " + ", ".join(missing)
 
+    if _stage_data is not None:
+        _stage_data["source_selection"] = time.perf_counter() - _stage_clock
     history = route["state"].get("history", [])
     if old_products and set(old_products) != set(products) and not state.get("pending_question"):
         history = []  # new topic: do not contaminate RAG answer with old topic
@@ -1332,9 +1350,70 @@ def metadata_chat(
     return answer
 
 
+# Lightweight, metadata-grounded typeahead (no model call required).
+@app.get("/suggestions")
+def get_suggestions(q: str, project_name: str):
+    import difflib
+    q = q.strip().lower()[:160]
+    if len(q) < 2 or not re.fullmatch(r"[a-zA-Z0-9_.-]{1,100}", project_name):
+        return {"suggestions": []}
+    path = os.path.join(BASE_OUTPUT_DIR, project_name, "metadata.json")
+    if not os.path.isfile(path):
+        return {"suggestions": []}
+    try:
+        records = load_metadata(path)
+        candidates = []
+        for record in records:
+            for product in record.get("product", []):
+                label = product.replace("_", " ").strip().title()
+                if label:
+                    candidates.append(f"Tell me about AU Bank {label}")
+                    candidates.append(f"What are the eligibility criteria for {label}?")
+        candidates = list(dict.fromkeys(candidates))
+        tokens = q.split()
+        scored = [(sum(2 for token in tokens if token in item.lower()) + difflib.SequenceMatcher(None,q,item.lower()).ratio(), item) for item in candidates]
+        return {"suggestions": [item for score,item in sorted(scored,reverse=True) if score >= 0.65][:5]}
+    except Exception:
+        return {"suggestions": []}
+
+# Fetch verified HTML meta descriptions from the same bank host as a related URL.
+@lru_cache(maxsize=2048)
+def _related_page_description(url: str):
+    from urllib.parse import urlsplit
+    from html.parser import HTMLParser
+    import requests
+    class MetaParser(HTMLParser):
+        description = ""
+        title = ""
+        in_title = False
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == "meta" and (a.get("name", "").lower() == "description" or a.get("property", "").lower() == "og:description") and not self.description:
+                self.description = a.get("content", "").strip()
+            if tag == "title": self.in_title = True
+        def handle_endtag(self, tag):
+            if tag == "title": self.in_title = False
+        def handle_data(self, data):
+            if self.in_title: self.title += data
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+        # No arbitrary hosts, private-network destinations or redirects.
+        if not (host == "aubank.in" or host.endswith(".aubank.in") or host == "au.bank.in" or host.endswith(".au.bank.in")):
+            return {"url":url,"title":"","description":""}
+        response = requests.get(url,timeout=3,allow_redirects=False,headers={"User-Agent":"AUra-Metadata/1.0"})
+        if response.status_code != 200 or "text/html" not in response.headers.get("content-type", ""):
+            return {"url":url,"title":"","description":""}
+        parser = MetaParser(); parser.feed(response.text[:180000])
+        return {"url":url,"title":parser.title.strip()[:140],"description":parser.description[:350]}
+    except Exception:
+        return {"url":url,"title":"","description":""}
+
 @app.post("/chat")
 async def chat_with_bot(payload: ChatRequest, request: Request):
-    print("\n💬 [CHAT] ➤ New chat query received.")
+    _request_started = time.perf_counter()
+    _stage_data = {}
+    _stage_token = _aura_stage_timings.set(_stage_data)
+    _console.print("\n[QUESTION] " + str(payload.query)[:500], flush=True)
     prompt = payload.query
     domain = payload.project_name
     print(f"🧾 [CHAT] ➤ Domain: {domain}, Prompt: {prompt}")
@@ -1342,7 +1421,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     # 🌐 Script-first detection: English acronyms and short inputs stay English.
     detected_lang = detect_input_language(prompt)
 
-    print(f"🌐 [LANGUAGE] ➤ Detected language: {detected_lang}")
+    _console.print(f"[LANGUAGE] {detected_lang}", flush=True)
 
     domain_folder = os.path.join(BASE_OUTPUT_DIR, domain)
     session_file = os.path.join(domain_folder, "session_state.pkl")
@@ -1402,6 +1481,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         )
 
         try:
+            _metadata_started = time.perf_counter()
             response = metadata_chat(
                 prompt=prompt,
                 domain=domain,
@@ -1413,26 +1493,36 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
                 original_question=prompt
             )
 
+            _stage_data["metadata_pipeline"] = time.perf_counter() - _metadata_started
+            _language_started = time.perf_counter()
             response = enforce_answer_language(
                 response, detected_lang, prompt, loaded_session.get("selected_chat_model"))
 
+            _stage_data["language_check"] = time.perf_counter() - _language_started
             # CTAs are separate from the response text, and are grounded in
             # the same verified Related Pages URLs the UI already displays.
             related_section = re.split(r"(?im)^\s*Related search results\s*:\s*$", response, maxsplit=1)
             related_urls = (re.findall(r"https?://[^\s<>]+", related_section[1])
                             if len(related_section) > 1 else [])
             ctas = _contextual_ctas(prompt, related_urls)
-            print("[CONTEXTUAL CTAS]", ctas)
+            _final_response = clean_customer_text(response)
+            _console.print("[TIMINGS] " + " | ".join(
+                f"{key}={seconds:.3f}s" for key, seconds in _stage_data.items()
+                if key != "metadata_pipeline"
+            ) + f" | total={time.perf_counter() - _request_started:.3f}s", flush=True)
+            _console.print("[RESPONSE] " + re.split(r"(?im)^\s*Related search results\s*:\s*$", _final_response, maxsplit=1)[0][:4000], flush=True)
+            _aura_stage_timings.reset(_stage_token)
             return {
-                "response": clean_customer_text(response),
+                "response": _final_response,
                 "language": detected_lang,
                 "conversation_id": conversation_id,
-                "ctas": ctas
+                "ctas": ctas,
+                "related_pages": [_related_page_description(url) for url in list(dict.fromkeys(related_urls))[:5]]
             }
         
 
         except Exception as e:
-            print("[METADATA CHAT ERROR]", str(e))
+            _console.print("[ERROR] Metadata chat:", str(e), flush=True)
             raise HTTPException(
                 status_code=500,
                 detail="Metadata chat processing failed."

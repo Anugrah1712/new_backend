@@ -1,3 +1,5 @@
+
+# Vector Databases & Embeddings
 chromadb
 tiktoken
 sentence-transformers
@@ -13,11 +15,11 @@ pymilvus
 weaviate-client
 PyPDF2
 
+# AI Models & APIs
 google-generativeai
 pinecone
 google-genai
 python-multipart
-
 openai
 tldextract
 accelerate
@@ -28,9 +30,18 @@ fastapi
 langdetect
 httpx==0.28.1
 deep-translator
+
+# LangChain
 langchain==0.2.16
 langchain-core==0.2.43
 langchain-community==0.2.16
 langchain-together==0.1.5
 langchain-text-splitters==0.2.4
+
+# Other Dependencies
 curl_cffi
+
+# Kokoro Neural Text-to-Speech (Free)
+kokoro>=0.9.4
+misaki[en]
+soundfile
