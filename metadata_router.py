@@ -31,6 +31,7 @@ PRODUCT_CANONICAL_MAP = {
     "term_deposit": "fixed_deposit", "term_deposits": "fixed_deposit",
     "au_savings_account": "savings_account",
     "personal_loan": "au_personal_loan",
+    "pl": "au_personal_loan",
     "personal_loans": "au_personal_loan",
     "au_personal_loans": "au_personal_loan",
     "green_fd": "green_fixed_deposit",
@@ -227,6 +228,9 @@ PRODUCT_ALIASES = {
     "green fixed deposit": "green_fixed_deposit",
     "fixed deposits": "fixed_deposit",
     "term deposits": "fixed_deposit",
+    "pl": "au_personal_loan",
+    "personal loan": "au_personal_loan",
+    "personal loans": "au_personal_loan",
 }
 def _find_products(question, products):
     """Detect one or more products, treating canonical aliases as one product."""
@@ -634,6 +638,27 @@ def route_question_llm(question, records, conversation_state=None, chat_model=No
     state = dict(conversation_state or {})
     if not chat_model:
         raise ValueError("A selected chat model is required for metadata routing")
+    # Expand the customer's colloquial abbreviation only for routing, never for
+    # answering. The product still MUST exist in the actual metadata catalog.
+    if re.search(r"(?i)(?<!\w)pl(?!\w)", question):
+        question_for_matching = re.sub(r"(?i)(?<!\w)pl(?!\w)", "personal loan", question)
+    else:
+        question_for_matching = question
+    # An explicit, unambiguous product request is resolved from the catalog
+    # BEFORE LLM classification. Never invent a product absent from metadata.
+    explicit = _explicitly_named_products(question_for_matching, distinct_products(records))
+    q_norm = normalize_product(question)
+    is_comparison = bool(re.search(r"\b(compare|comparison|versus|vs|difference between)\b", q_norm))
+    specific = [p for p in explicit if p not in {"loan", "account", "deposit", "card"}]
+    if len(specific) == 1 and not is_comparison:
+        catalog_ids = distinct_products(records)
+        matching = [p for p in catalog_ids if canonical_product(p) == specific[0]]
+        if matching:
+            chosen = specific[0] if specific[0] in matching else matching[0]
+            state.update(products=[chosen], product=chosen, pending_question=None,
+                         last_banking_question=question)
+            return {"status": "ready", "intent": "single", "products": [chosen],
+                    "product": chosen, "question": question, "state": state}
     # Deterministic threshold beats LLM inference for financial product routing.
     if bulk_fd_amount(question):
         ids = {p for r in records for p in r.get("product", [])}

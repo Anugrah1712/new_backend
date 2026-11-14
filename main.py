@@ -1,5 +1,6 @@
 # main.py
 from pathlib import Path
+from conversation_layer import finalize_answer, conversational_guardrail, is_casual_social
 import builtins as _console
 import logging as _logging
 import contextvars as _contextvars
@@ -562,7 +563,10 @@ def conversational_social_reply(question, chat_model, response_language):
     language_rule = answer_language_instruction(response_language, question)
     reply_rules = (
         "You are AUra+, AU Bank's friendly, professional banking assistant. "
-        "Respond naturally and warmly to the user's SOCIAL message, in 1-2 short sentences. "
+        "Respond naturally, with a little personality, to the user's SOCIAL message, in 1-3 short sentences. "
+        "React to what the user actually said; a casual how-are-you deserves a friendly answer "
+        "and a conversational follow-up, not a generic product menu. "
+        "Acknowledge celebrations and difficult moments. For insults, remain calm, set polite boundaries, and offer help. "
         "Do not answer unrelated factual questions or pretend to have human experiences. "
         "Gently invite a banking question, but do not repeat a robotic scope disclaimer. "
         "Use the current Indian time to validate time-of-day greetings. "
@@ -1029,6 +1033,13 @@ def metadata_chat(
         "a temporary newly-added-beneficiary restriction for the daily limit. "
         "If the exact daily limit is not supported, state that it cannot be verified. ")
 
+    answer_instructions += ("\nCONVERSATIONAL INTELLIGENCE: Be warm, engaging and context-aware. "
+        "Acknowledge good news, setbacks or frustration naturally before addressing banking intent. "
+        "Understand informal speech and short forms. Maintain relevant follow-up context. "
+        "Be respectful with hostile language and politely ask for civility when appropriate. "
+        "Do not fabricate product details or use emojis mechanically. "
+        "Never let conversational tone replace verified evidence. ")
+
     # Payout mode is determined by the current user request, not by the
     # presence of other rate tables in the retrieved article.
     fd_rate_request = bool(re.search(
@@ -1445,8 +1456,23 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         special = _source_grounded_special_answer(prompt, loaded_session, detected_lang,
                     os.path.join(domain_folder, "faiss_index"))
         print(f"[PERFORMANCE] Special-source answer: {time.perf_counter()-t0:.2f}s")
-        return {"response": clean_customer_text(special), "language": detected_lang,
+        return {"response": clean_customer_text(finalize_answer(special, prompt, detected_lang)), "language": detected_lang,
                 "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+
+    # Fast, context-aware conversational safety gate. This runs BEFORE scope routing.
+    # It does not block a legitimate banking question containing an expletive.
+    guarded = conversational_guardrail(prompt, detected_lang)
+    if guarded is not None:
+        return {"response": guarded, "language": detected_lang,
+                "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+
+    # Natural social exchanges bypass retrieval and its generic banking fallback.
+    if is_casual_social(prompt):
+        social_reply = conversational_social_reply(
+            prompt, loaded_session.get("selected_chat_model"), detected_lang)
+        if social_reply:
+            return {"response": strip_social_links(social_reply), "language": detected_lang,
+                    "conversation_id": payload.conversation_id or str(uuid.uuid4())}
 
     # Social conversation is handled by the selected LLM, before RAG.
     # This intentionally does not depend on a hardcoded greeting list.
@@ -1454,7 +1480,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     if len(prompt.split()) <= 18 and not re.search(
             r"\b(bank|fd|fixed deposit|loan|account|branch|deposit|transfer|rate|interest|card|lea|police|ncrp|complaint|balance|kyc|atm|m[ -]?pin|pin|password|otp|reset|forgot|forgotten|upi|imps|neft|rtgs|netbanking)\b",
             prompt, re.I):
-        greeting = validate_greeting(prompt)
+        greeting = validate_greeting(prompt) if not is_casual_social(prompt) else None
         if greeting:
             return {"response": greeting, "language": detected_lang,
                     "conversation_id": payload.conversation_id or str(uuid.uuid4())}
@@ -1505,7 +1531,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             related_urls = (re.findall(r"https?://[^\s<>]+", related_section[1])
                             if len(related_section) > 1 else [])
             ctas = _contextual_ctas(prompt, related_urls)
-            _final_response = clean_customer_text(response)
+            _final_response = clean_customer_text(finalize_answer(response, prompt, detected_lang))
             _console.print("[TIMINGS] " + " | ".join(
                 f"{key}={seconds:.3f}s" for key, seconds in _stage_data.items()
                 if key != "metadata_pipeline"
@@ -1585,7 +1611,7 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             print(f"⚠️ [SQLITE] ➤ Failed to log chat: {e}")
 
         return {
-            "response": clean_customer_text(response),
+            "response": clean_customer_text(finalize_answer(response, prompt, detected_lang)),
             "language": detected_lang
         }
 
