@@ -77,6 +77,21 @@ CREATE TABLE IF NOT EXISTS chatlog (
 ''')
 conn.commit()
 
+
+def save_chat_log(question, answer, ip, project_name):
+    """Persist each completed chatbot turn without sharing a global cursor."""
+    try:
+        with sqlite3.connect(DB_PATH, timeout=15) as db:
+            db.execute("""
+                INSERT INTO chatlog (question, answer, ip, project_name, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (str(question), str(answer), str(ip), str(project_name),
+                  datetime.utcnow().isoformat()))
+        _console.print("[SQLITE] Chat saved successfully", flush=True)
+    except Exception as exc:
+        _console.print(f"[SQLITE ERROR] Failed to save chat: {exc!r}", flush=True)
+
+
 # Allow frontend CORS origins
 origins = [
     os.getenv("AWS_IP"),
@@ -1427,6 +1442,16 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
     _console.print("\n[QUESTION] " + str(payload.query)[:500], flush=True)
     prompt = payload.query
     domain = payload.project_name
+    def _record_chat_response(result):
+        # All successful /chat response branches pass through this helper.
+        save_chat_log(
+            question=prompt,
+            answer=result.get("response", ""),
+            ip=request.client.host if request.client else "unknown",
+            project_name=domain,
+        )
+        return result
+
     print(f"🧾 [CHAT] ➤ Domain: {domain}, Prompt: {prompt}")
 
     # 🌐 Script-first detection: English acronyms and short inputs stay English.
@@ -1456,23 +1481,23 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         special = _source_grounded_special_answer(prompt, loaded_session, detected_lang,
                     os.path.join(domain_folder, "faiss_index"))
         print(f"[PERFORMANCE] Special-source answer: {time.perf_counter()-t0:.2f}s")
-        return {"response": clean_customer_text(finalize_answer(special, prompt, detected_lang)), "language": detected_lang,
-                "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+        return _record_chat_response({"response": clean_customer_text(finalize_answer(special, prompt, detected_lang)), "language": detected_lang,
+                "conversation_id": payload.conversation_id or str(uuid.uuid4())})
 
     # Fast, context-aware conversational safety gate. This runs BEFORE scope routing.
     # It does not block a legitimate banking question containing an expletive.
     guarded = conversational_guardrail(prompt, detected_lang)
     if guarded is not None:
-        return {"response": guarded, "language": detected_lang,
-                "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+        return _record_chat_response({"response": guarded, "language": detected_lang,
+                "conversation_id": payload.conversation_id or str(uuid.uuid4())})
 
     # Natural social exchanges bypass retrieval and its generic banking fallback.
     if is_casual_social(prompt):
         social_reply = conversational_social_reply(
             prompt, loaded_session.get("selected_chat_model"), detected_lang)
         if social_reply:
-            return {"response": strip_social_links(social_reply), "language": detected_lang,
-                    "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+            return _record_chat_response({"response": strip_social_links(social_reply), "language": detected_lang,
+                    "conversation_id": payload.conversation_id or str(uuid.uuid4())})
 
     # Social conversation is handled by the selected LLM, before RAG.
     # This intentionally does not depend on a hardcoded greeting list.
@@ -1482,16 +1507,16 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             prompt, re.I):
         greeting = validate_greeting(prompt) if not is_casual_social(prompt) else None
         if greeting:
-            return {"response": greeting, "language": detected_lang,
-                    "conversation_id": payload.conversation_id or str(uuid.uuid4())}
+            return _record_chat_response({"response": greeting, "language": detected_lang,
+                    "conversation_id": payload.conversation_id or str(uuid.uuid4())})
         social_reply = conversational_social_reply(
             prompt, loaded_session.get("selected_chat_model"), detected_lang)
         if social_reply is not None:
-            return {
+            return _record_chat_response({
                 "response": strip_social_links(social_reply),
                 "language": detected_lang,
                 "conversation_id": payload.conversation_id or str(uuid.uuid4())
-            }
+            })
 
     metadata_path = os.path.join(
         domain_folder, "metadata.json"
@@ -1538,13 +1563,13 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
             ) + f" | total={time.perf_counter() - _request_started:.3f}s", flush=True)
             _console.print("[RESPONSE] " + re.split(r"(?im)^\s*Related search results\s*:\s*$", _final_response, maxsplit=1)[0][:4000], flush=True)
             _aura_stage_timings.reset(_stage_token)
-            return {
+            return _record_chat_response({
                 "response": _final_response,
                 "language": detected_lang,
                 "conversation_id": conversation_id,
                 "ctas": ctas,
                 "related_pages": [_related_page_description(url) for url in list(dict.fromkeys(related_urls))[:5]]
-            }
+            })
         
 
         except Exception as e:
@@ -1598,22 +1623,10 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print("✅ [INFERENCE] ➤ Response generated.")
         messages.append({"role": "assistant", "content": response})
 
-        # ✅ Log question + answer to SQLite
-        try:
-            user_ip = request.client.host
-            cursor.execute('''
-                INSERT INTO chatlog (question, ip, project_name, timestamp)
-                VALUES (?, ?, ?, ?)
-            ''', (f"Q: {prompt} | A: {response}", user_ip, domain, datetime.utcnow().isoformat()))
-            conn.commit()
-            print("🗃️ [SQLITE] ➤ Chat log (with answer) inserted.")
-        except Exception as e:
-            print(f"⚠️ [SQLITE] ➤ Failed to log chat: {e}")
-
-        return {
+        return _record_chat_response({
             "response": clean_customer_text(finalize_answer(response, prompt, detected_lang)),
             "language": detected_lang
-        }
+        })
 
     except Exception as e:
         print(f"❌ [INFERENCE] ➤ Inference error: {str(e)}")
