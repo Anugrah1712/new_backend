@@ -148,11 +148,22 @@ import faiss
 import pickle
 import os
 
-async def rebuild_faiss_retriever(index_path: str):
-    model_name = "sentence-transformers/all-MiniLM-L6-v2"
-    embeddings = SentenceTransformerEmbeddings(model_name=model_name)
+@lru_cache(maxsize=4)
+def _shared_embeddings(model_name):
+    """Load the sentence-transformer once per process/model.
 
-    abs_index_path = os.path.abspath(index_path)
+    The same embedding instance is reused by FAISS and metadata ranking;
+    no model, prompts, source filtering, or retrieval parameters change.
+    """
+    from langchain_community.embeddings import SentenceTransformerEmbeddings
+    return SentenceTransformerEmbeddings(model_name=model_name)
+
+
+@lru_cache(maxsize=4)
+def _legacy_retriever_cached(abs_index_path, faiss_mtime_ns, pickle_mtime_ns):
+    """Reuse legacy retriever until either FAISS index file changes."""
+    model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    embeddings = _shared_embeddings(model_name)
     index_faiss_path = os.path.join(abs_index_path, "index.faiss")
     index_pkl_path = os.path.join(abs_index_path, "index.pkl")
 
@@ -178,6 +189,17 @@ async def rebuild_faiss_retriever(index_path: str):
         print(f"[✅] Doc {i+1} (ID: {k}) preview: {vectorstore.docstore._dict[k].page_content[:120]}")
 
     return vectorstore.as_retriever()
+
+
+async def rebuild_faiss_retriever(index_path: str):
+    abs_index_path = os.path.abspath(index_path)
+    faiss_file = os.path.join(abs_index_path, "index.faiss")
+    pickle_file = os.path.join(abs_index_path, "index.pkl")
+    return _legacy_retriever_cached(
+        abs_index_path,
+        os.stat(faiss_file).st_mtime_ns,
+        os.stat(pickle_file).st_mtime_ns,
+    )
 
 @app.post("/preprocess")
 async def preprocess(
@@ -481,7 +503,7 @@ def _load_metadata_index(index_dir, model_name, faiss_mtime, pickle_mtime):
     from langchain_community.embeddings import SentenceTransformerEmbeddings
     from langchain_community.vectorstores import FAISS
 
-    embeddings = SentenceTransformerEmbeddings(model_name=model_name)
+    embeddings = _shared_embeddings(model_name)
     index = faiss.read_index(os.path.join(index_dir, "index.faiss"))
     with open(os.path.join(index_dir, "index.pkl"), "rb") as f:
         stored = pickle.load(f)
@@ -979,38 +1001,57 @@ def _related_topic_tokens(text):
 
 
 def _directly_related_page(question, record):
-    """Reject same-product-but-different-service recommendations."""
+    """Strictly match the requested banking service, not incidental metadata mentions.
+
+    Used ONLY to populate Related Pages; answer retrieval/generation is unchanged.
+    """
     from urllib.parse import urlsplit
-    q = str(question or '').lower()
-    path = urlsplit(record['url']).path.lower()
-    summary = str(record.get('summary', '')).lower()
-    title = path.replace('-', ' ').replace('_', ' ')
-    # Service-specific mismatches observed during AU Small Finance Bank UAT.
-    if re.search(r'\bdebit\s*card\b', q) and re.search(r'currency|forex|cross.currency|credit.card', title):
+    q = str(question or "").lower()
+    path = urlsplit(record["url"]).path.lower()
+    summary = str(record.get("summary", "")).lower()
+    title = path.replace("-", " ").replace("_", " ")
+    text = title + " " + summary[:650]
+
+    # Never recommend maintenance notices, unrelated promotions, or generic news.
+    if re.search(r"downtime|scheduled.system.upgrade|maintenance|exclusive.news", path):
         return False
-    if re.search(r'\b(?:xpress|express)\s*emi\b', q):
-        # Generic credit-card and offers pages may mention EMI incidentally.
-        # Only a dedicated Xpress/Express EMI page qualifies for this query.
-        if not re.search(r'(?:xpress|express)[-_ ]*emi', path):
-            return False
-    if re.search(r'\b(?:upgrade|upgradation|upgrading)\b', q) and 'card' in q:
-        if not re.search(r'upgrad', title + ' ' + summary):
-            return False
-    if _contact_request(q) and not re.search(r'contact|customer.care|support|reach.us|email|helpline', title):
+
+    # Explicit service intents require a page ABOUT that exact service.
+    # Requiring the service in the URL prevents incidental mentions in summaries
+    # from surfacing unrelated product pages.
+    card_upgrade = bool(re.search(r"\b(?:upgrad\w*)\b", q) and
+                        re.search(r"\b(?:credit\s*card|card)\b", q))
+    if card_upgrade:
+        return bool(re.search(r"credit.card|credit.cards|card", path) and
+                    re.search(r"upgrad", path))
+
+    debit_apply = bool(re.search(r"\bdebit\s*card\b", q) and
+                       re.search(r"\b(?:apply|application|request|new|issue|issuance|karna|chahiye)\b", q))
+    if debit_apply:
+        return bool(re.search(r"debit.card", path) and
+                    re.search(r"apply|application|request|issu|new.card", path))
+
+    if re.search(r"\b(?:xpress|express)\s*emi\b", q):
+        return bool(re.search(r"(?:xpress|express)[-_ ]*emi", path))
+
+    if _contact_request(q):
+        return bool(re.search(r"contact|customer.care|support|reach.us|email|helpline", title))
+
+    if re.search(r"\bdebit\s*card\b", q) and re.search(r"currency|forex|cross.currency|credit.card", title):
         return False
-    if re.search(r'\b(?:debit\s*card|xpress\s*emi|credit\s*card)\b', q):
-        if re.search(r'exclusive.offerings|identify.genuine.bank.calls|find.debit.card.number', path):
-            return False
+    if re.search(r"\b(?:debit\s*card|credit\s*card)\b", q) and re.search(
+            r"exclusive.offerings|identify.genuine.bank.calls|find.debit.card.number", path):
+        return False
+
     tokens = _related_topic_tokens(q)
     if not tokens:
         return False
-    evidence = _related_topic_tokens(title + ' ' + summary[:650])
+    evidence = _related_topic_tokens(text)
     expanded = set(tokens)
     for token in tokens:
         expanded.update(_RELATED_SYNONYMS.get(token, ()))
-    # Require a real topical overlap, not merely the metadata product tag.
+    # A broad product keyword alone is not sufficient evidence of a match.
     return bool(expanded & evidence)
-
 
 def _related_metadata_urls(question, products, ranked_by_product,
                            selected_by_product, indexed_urls, records, max_related=5):
