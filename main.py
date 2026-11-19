@@ -908,6 +908,110 @@ def _select_intent_sources(question, product, records, available_urls, candidate
     return result
 
 
+# Customer-care details supplied in the AppSec/UAT issue register. Keep these
+# deterministic so the model cannot omit addresses or invent alternatives.
+_AU_SUPPORT_EMAILS = (
+    ("Customer Care", "customercare@aubank.in"),
+    ("Credit Cards", "creditcard.support@aubank.in"),
+    ("Premium Credit Cards", "creditcard.priority@aubank.in"),
+    ("Commercial Credit Cards", "corpcc.support@aubank.in"),
+    ("NRI Services", "nriservices@aubank.in"),
+    ("Investor Relations", "investorrelations@aubank.in"),
+    ("Media Queries", "media@aubank.in"),
+)
+_AU_CARE_PHONE = "1800 1200 1200"
+
+
+def _contact_request(question):
+    q = str(question or "").lower()
+    wants_contact = bool(re.search(r"\b(contact|customer\s*(?:care|support)|helpline|call|phone|email|e-mail|mail\s*id|reach|complaint|sampark)\b", q))
+    wants_bank = bool(re.search(r"\b(au|bank|banking|card|nri|investor|media|customer)\b", q))
+    return wants_contact and wants_bank
+
+
+def _official_contact_answer(question):
+    q = str(question or "").lower()
+    categories = []
+    if re.search(r"\b(premium|priority)\b", q):
+        categories = ["Premium Credit Cards"]
+    elif re.search(r"\b(commercial|corporate)\b", q) and "card" in q:
+        categories = ["Commercial Credit Cards"]
+    elif re.search(r"\bcredit\s*card", q):
+        categories = ["Credit Cards"]
+    elif re.search(r"\bnri\b", q):
+        categories = ["NRI Services"]
+    elif re.search(r"\binvestor", q):
+        categories = ["Investor Relations"]
+    elif re.search(r"\bmedia|press\b", q):
+        categories = ["Media Queries"]
+    else:
+        categories = [label for label, _ in _AU_SUPPORT_EMAILS] if re.search(r"\b(email|e-mail|mail)\b", q) else ["Customer Care"]
+    lines = ["You can contact AU Small Finance Bank through:",
+             f"Phone (Customer Care): {_AU_CARE_PHONE}", "Email:"]
+    lines.extend(f"- {label}: {address}" for label, address in _AU_SUPPORT_EMAILS if label in categories)
+    return "\n".join(lines)
+
+
+def _support_fallback(language='en'):
+    if language == 'hi-Latn':
+        return ("Maaf kijiye, is request ke liye sahi jaankari nahi mil saki. "
+                "Kripya AU Small Finance Bank Customer Care se 1800 1200 1200 par sampark karein.")
+    if language == 'hi':
+        return ("क्षमा करें, इस अनुरोध के लिए सटीक जानकारी नहीं मिल सकी। "
+                "कृपया AU Small Finance Bank Customer Care से 1800 1200 1200 पर संपर्क करें।")
+    return ("Sorry, I couldn't find accurate information for this request. "
+            "Please contact AU Small Finance Bank Customer Care at 1800 1200 1200 for assistance.")
+
+
+_RELATED_STOPWORDS = set("the a an and or for to of in on at is are can i my me how what do does get want need please through with from au bank small finance account accounts card cards apply application new service services help using via mujhe mera meri hai karna ka ki ke ko se apna apni kya".split())
+_RELATED_SYNONYMS = {
+    'debit': {'debit', 'atm'}, 'atm': {'debit', 'atm'},
+    'credit': {'credit'}, 'upgrade': {'upgrade', 'upgradation', 'upgrading'},
+    'xpress': {'xpress', 'express'}, 'emi': {'emi', 'instalment', 'installment'},
+    'cheque': {'cheque', 'checkbook'}, 'book': {'book', 'checkbook'},
+    'email': {'email', 'contact'}, 'contact': {'contact', 'customer', 'care'},
+}
+
+
+def _related_topic_tokens(text):
+    raw = re.findall(r"[a-z0-9]+", str(text or '').lower())
+    return {w for w in raw if len(w) > 2 and w not in _RELATED_STOPWORDS}
+
+
+def _directly_related_page(question, record):
+    """Reject same-product-but-different-service recommendations."""
+    from urllib.parse import urlsplit
+    q = str(question or '').lower()
+    path = urlsplit(record['url']).path.lower()
+    summary = str(record.get('summary', '')).lower()
+    title = path.replace('-', ' ').replace('_', ' ')
+    # Service-specific mismatches observed during AU Small Finance Bank UAT.
+    if re.search(r'\bdebit\s*card\b', q) and re.search(r'currency|forex|cross.currency|credit.card', title):
+        return False
+    if re.search(r'\b(?:xpress|express)\s*emi\b', q):
+        # Generic credit-card and offers pages may mention EMI incidentally.
+        # Only a dedicated Xpress/Express EMI page qualifies for this query.
+        if not re.search(r'(?:xpress|express)[-_ ]*emi', path):
+            return False
+    if re.search(r'\b(?:upgrade|upgradation|upgrading)\b', q) and 'card' in q:
+        if not re.search(r'upgrad', title + ' ' + summary):
+            return False
+    if _contact_request(q) and not re.search(r'contact|customer.care|support|reach.us|email|helpline', title):
+        return False
+    if re.search(r'\b(?:debit\s*card|xpress\s*emi|credit\s*card)\b', q):
+        if re.search(r'exclusive.offerings|identify.genuine.bank.calls|find.debit.card.number', path):
+            return False
+    tokens = _related_topic_tokens(q)
+    if not tokens:
+        return False
+    evidence = _related_topic_tokens(title + ' ' + summary[:650])
+    expanded = set(tokens)
+    for token in tokens:
+        expanded.update(_RELATED_SYNONYMS.get(token, ()))
+    # Require a real topical overlap, not merely the metadata product tag.
+    return bool(expanded & evidence)
+
+
 def _related_metadata_urls(question, products, ranked_by_product,
                            selected_by_product, indexed_urls, records, max_related=5):
     """Only show intent-relevant indexed resources; fewer than five is fine."""
@@ -940,7 +1044,7 @@ def _related_metadata_urls(question, products, ranked_by_product,
         path = urlsplit(r["url"]).path.lower().rstrip("/")
         key = "interest-rate-directory" if path in ("/interest-rate", "/interest-rates") else path
         score = max(_page_relevance(question, r, p) for p in products)
-        if score < 0 or key in seen: continue
+        if score < 0 or key in seen or not _directly_related_page(question, r): continue
         if intent["opening"] and "savings_account" in product_ids and re.search(r"/blogs/(?:open-2-savings|open-child-first|open-minor|open-kids)", path): continue
         if intent["documents"] and "au_personal_loan" in product_ids:
             if re.search(r"/savings-account/|company-secretaries|/au-0101-app|/apply-now/|/business/loans/apply-for-loan/", path): continue
@@ -1055,6 +1159,27 @@ def metadata_chat(
         "Do not fabricate product details or use emojis mechanically. "
         "Never let conversational tone replace verified evidence. ")
 
+    # Universal, language-independent answer structure. Do not hardcode any
+    # customer question, product procedure, or specific language response.
+    answer_instructions += (
+        "\nPROCEDURAL RESPONSE FORMAT: When source evidence contains a verified "
+        "sequence of actions, present each action as a numbered item using "
+        "exactly '1. **Short action title** Description' on its own line, "
+        "then '2. **Short action title** Description', and so on. "
+        "Use the customer's language for titles and descriptions. "
+        "Never use 'Step 1:' or unnumbered procedural paragraphs. "
+        "Never invent app screens, buttons, eligibility, or steps. "
+        "If the requested operation is NOT documented, say its procedure "
+        "cannot be verified. If the evidence describes a DIFFERENT operation "
+        "(such as applying for a new card instead of upgrading an existing one), "
+        "label that procedure explicitly as a DIFFERENT operation, and only "
+        "provide its verified steps when relevant. Do not imply the alternate "
+        "procedure fulfills the original request. "
+        "For unsupported operations, direct the user to verified customer "
+        "support details. Do not invent related pages or tell the customer "
+        "to look at related results unless such results are actually provided. "
+    )
+
     # Payout mode is determined by the current user request, not by the
     # presence of other rate tables in the retrieved article.
     fd_rate_request = bool(re.search(
@@ -1117,9 +1242,14 @@ def metadata_chat(
         conversation_states[state_key] = route["state"]
 
     if route["status"] == "out_of_scope":
-        language_instruction = ("Respond in the language and script of the user's message. "
-                                "If Hinglish, use natural Hinglish.")
-        return run_scope_reply(prompt, loaded_session.get("selected_chat_model"), language_instruction)
+        # Card-upgrade requests are in scope even when the router fails to
+        # associate 'upgradation' with the metadata's credit-card product.
+        # Search indexed evidence instead of immediately returning a fallback.
+        if (re.search(r"\b(?:upgrad\w*)\b", search_question, re.I)
+                and re.search(r"\b(?:credit\s*card|card)\b", search_question, re.I)):
+            route["status"] = "general"
+        else:
+            return _support_fallback(response_language)
 
     if route["status"] == "general":
         from inference import inference_faiss
@@ -1309,9 +1439,14 @@ def metadata_chat(
         for selected_url in urls:
             print("[URL SUMMARY]", selected_url, "|", summary_by_url.get(selected_url, "NOT FOUND"))
 
+    # Do not reject the whole request merely because the source does not
+    # document an existing-card upgrade. The model can explain that limitation
+    # using the available evidence, without mislabeling new-card application
+    # instructions as upgrade instructions.
+
     if len(selected_by_product) != len(products):
         missing = [p for p in products if p not in selected_by_product]
-        return "I couldn't find indexed source information for: " + ", ".join(missing)
+        return _support_fallback(response_language)
 
     if _stage_data is not None:
         _stage_data["source_selection"] = time.perf_counter() - _stage_clock
@@ -1360,6 +1495,32 @@ def metadata_chat(
         primary = "https://www.au.bank.in/personal-banking/personal-loan"
         if normalize_url(primary) in {normalize_url(u) for u in available_urls}:
             related_urls = list(dict.fromkeys([primary] + related_urls))[:5]
+    # Related Pages are discovery links, not citations for the generated answer.
+    # Do not require them to be in selected_by_product: that restriction
+    # previously hid directly relevant indexed pages (notably Xpress EMI).
+    # Require metadata + FAISS indexing + a direct service/intent match.
+    indexed_normalized = {normalize_url(u) for u in available_urls}
+    metadata_by_url = {normalize_url(r["url"]): r for r in records}
+    selected_evidence = [u for group in selected_by_product.values() for u in group]
+    candidate_urls = list(dict.fromkeys(related_urls + selected_evidence))
+
+    # A product's router tag can be broader than its service page. Discover
+    # indexed service-specific metadata without inventing any URLs.
+    if re.search(r"\b(?:xpress|express)\s*emi\b", search_question, re.I):
+        service_records = [r for r in records if
+            normalize_url(r["url"]) in indexed_normalized and
+            re.search(r"(?:xpress|express)[-_ ]*emi", r["url"], re.I)]
+        candidate_urls = [r["url"] for r in service_records] + candidate_urls
+
+    def eligible_related(url):
+        key = normalize_url(url)
+        record = metadata_by_url.get(key)
+        return (key in indexed_normalized and record is not None and
+                _directly_related_page(search_question, record))
+
+    related_urls = list(dict.fromkeys(
+        u for u in candidate_urls if eligible_related(u)
+    ))[:3]
     answer = _replace_related_results(answer, related_urls)
     print("[RELATED PAGES]", related_urls)
 
@@ -1483,6 +1644,25 @@ async def chat_with_bot(payload: ChatRequest, request: Request):
         print(f"[PERFORMANCE] Special-source answer: {time.perf_counter()-t0:.2f}s")
         return _record_chat_response({"response": clean_customer_text(finalize_answer(special, prompt, detected_lang)), "language": detected_lang,
                 "conversation_id": payload.conversation_id or str(uuid.uuid4())})
+
+    # Official support details are deterministic; do not depend on the model
+    # extracting email addresses from the scraped Contact Us page.
+    if _contact_request(prompt):
+        return _record_chat_response({
+            "response": clean_customer_text(finalize_answer(
+                _official_contact_answer(prompt), prompt, detected_lang)),
+            "language": detected_lang,
+            "conversation_id": payload.conversation_id or str(uuid.uuid4()),
+            "ctas": [],
+            # Contact questions take this deterministic fast path rather than
+            # metadata_chat(), so they must populate the sidebar explicitly.
+            # About Us is the official bank-information page requested by UAT.
+            "related_pages": [{
+                "url": AU_ABOUT_URL,
+                "title": "About AU Small Finance Bank",
+                "description": "Official AU Small Finance Bank information and website navigation."
+            }]
+        })
 
     # Fast, context-aware conversational safety gate. This runs BEFORE scope routing.
     # It does not block a legitimate banking question containing an expletive.
